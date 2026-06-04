@@ -50,6 +50,7 @@ load_config() {
   : "${MONTHLY_HOURS:=730}"
   : "${STOPPED_AMBER_DAYS:=7}"
   : "${STOPPED_RED_DAYS:=30}"
+  : "${REQUIRED_TAGS:=}"
   : "${REDACT_PRIVATE_IPS:=false}"
   : "${REDACT_PUBLIC_IPS:=false}"
   : "${REDACT_INSTANCE_NAMES:=false}"
@@ -273,6 +274,7 @@ render_reports() {
     --redact-instance-names "${REDACT_INSTANCE_NAMES}" \
     --redact-db-names "${REDACT_DB_NAMES}" \
     --redact-vpc-cidrs "${REDACT_VPC_CIDRS}" \
+    --required-tags "${REQUIRED_TAGS}" \
     --state-file "${OUTPUT_DIR%/}/infraglance-state.json"
 }
 

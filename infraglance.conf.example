@@ -36,6 +36,11 @@ MONTHLY_HOURS="730"
 STOPPED_AMBER_DAYS="7"
 STOPPED_RED_DAYS="30"
 
+# Comma-separated list of tag keys that must be present on all EC2 and RDS resources.
+# Leave empty to disable tagging compliance checks.
+# Example: REQUIRED_TAGS="Environment,Owner,CostCenter,Project"
+REQUIRED_TAGS=""
+
 # Report sections. You can add more names, for example "Dev" or "Security".
 ENVIRONMENTS=(
   "Prod"
