@@ -1,0 +1,6 @@
+cloudmonitor.conf
+__pycache__/
+data/
+site/
+*.json
+*region_list.txt
