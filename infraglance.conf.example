@@ -41,6 +41,10 @@ STOPPED_RED_DAYS="30"
 # Example: REQUIRED_TAGS="Environment,Owner,CostCenter,Project"
 REQUIRED_TAGS=""
 
+# Slack incoming webhook URL for post-scan summary notifications.
+# Leave empty to disable. Create a webhook at api.slack.com/messaging/webhooks
+SLACK_WEBHOOK_URL=""
+
 # Report sections. You can add more names, for example "Dev" or "Security".
 ENVIRONMENTS=(
   "Prod"

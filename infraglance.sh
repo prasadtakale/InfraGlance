@@ -51,6 +51,8 @@ load_config() {
   : "${STOPPED_AMBER_DAYS:=7}"
   : "${STOPPED_RED_DAYS:=30}"
   : "${REQUIRED_TAGS:=}"
+  : "${HISTORY_FILE:=${OUTPUT_DIR%/}/infraglance-history.json}"
+  : "${SLACK_WEBHOOK_URL:=}"
   : "${REDACT_PRIVATE_IPS:=false}"
   : "${REDACT_PUBLIC_IPS:=false}"
   : "${REDACT_INSTANCE_NAMES:=false}"
@@ -205,6 +207,83 @@ check_config() {
   log "Config check completed"
 }
 
+collect_eks_region() {
+  local account="$1" label="$2" region="$3" account_dir="$4"
+  local eks_work="${account_dir}/eks_work_${region}"
+  local eks_file="${account_dir}/eks_${region}.json"
+
+  log "Collecting EKS for ${label} in ${region}"
+  mkdir -p "${eks_work}"
+
+  aws_for_account "${account}" --region "${region}" eks list-clusters --output json \
+    > "${eks_work}/clusters.json" 2>/dev/null || { rm -rf "${eks_work}"; return 0; }
+
+  local cluster_name safe_cn
+  while IFS= read -r cluster_name; do
+    [[ -n "${cluster_name}" ]] || continue
+    safe_cn="$(safe_name "${cluster_name}")"
+
+    aws_for_account "${account}" --region "${region}" eks describe-cluster \
+      --name "${cluster_name}" --output json \
+      > "${eks_work}/cluster_${safe_cn}.json" 2>/dev/null || continue
+
+    local ng_name safe_ng
+    while IFS= read -r ng_name; do
+      [[ -n "${ng_name}" ]] || continue
+      safe_ng="$(safe_name "${ng_name}")"
+      aws_for_account "${account}" --region "${region}" eks describe-nodegroup \
+        --cluster-name "${cluster_name}" --nodegroup-name "${ng_name}" --output json \
+        > "${eks_work}/ng_${safe_cn}_${safe_ng}.json" 2>/dev/null || true
+    done < <(aws_for_account "${account}" --region "${region}" eks list-nodegroups \
+      --cluster-name "${cluster_name}" --query 'nodegroups[]' --output text 2>/dev/null \
+      | tr '\t' '\n' | grep -v '^$')
+  done < <(python3 -c "
+import json, sys
+with open('${eks_work}/clusters.json') as f:
+    data = json.load(f)
+for c in data.get('clusters', []):
+    print(c)
+" 2>/dev/null)
+
+  python3 - "${eks_work}" > "${eks_file}" <<'PYEOF'
+import json, sys, glob, os, re
+
+eks_work = sys.argv[1]
+clusters_file = os.path.join(eks_work, "clusters.json")
+if not os.path.exists(clusters_file):
+    print('{"Clusters":[]}')
+    sys.exit(0)
+
+with open(clusters_file) as f:
+    cluster_names = json.load(f).get("clusters", [])
+
+result = []
+for cn in cluster_names:
+    safe_cn = re.sub(r"[^A-Za-z0-9_]", "_", cn)
+    cf = os.path.join(eks_work, f"cluster_{safe_cn}.json")
+    if not os.path.exists(cf):
+        continue
+    with open(cf) as f:
+        cluster = json.load(f).get("cluster", {})
+    ngs = []
+    for ng_file in sorted(glob.glob(os.path.join(eks_work, f"ng_{safe_cn}_*.json"))):
+        with open(ng_file) as f:
+            ng = json.load(f).get("nodegroup", {})
+        if ng:
+            ngs.append(ng)
+    cluster["nodegroups"] = ngs
+    result.append(cluster)
+
+print(json.dumps({"Clusters": result}))
+PYEOF
+
+  rm -rf "${eks_work}"
+
+  if [[ -s "${eks_file}" ]]; then
+    printf 'eks\t%s\t%s\t%s\n' "${label}" "${region}" "${eks_file}" >> "${MANIFEST_FILE}"
+  fi
+}
+
 collect_region() {
   local account="$1"
   local label="$2"
@@ -239,6 +318,8 @@ collect_region() {
     log "Reserved instance collection failed for ${label} in ${region}; continuing"
     rm -f "${reserved_file}"
   fi
+
+  collect_eks_region "${account}" "${label}" "${region}" "${account_dir}"
 }
 
 collect_account() {
@@ -275,6 +356,8 @@ render_reports() {
     --redact-db-names "${REDACT_DB_NAMES}" \
     --redact-vpc-cidrs "${REDACT_VPC_CIDRS}" \
     --required-tags "${REQUIRED_TAGS}" \
+    --history-file "${HISTORY_FILE}" \
+    --slack-webhook-url "${SLACK_WEBHOOK_URL}" \
     --state-file "${OUTPUT_DIR%/}/infraglance-state.json"
 }
 

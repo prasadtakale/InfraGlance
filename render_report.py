@@ -4,6 +4,8 @@ import csv
 import html
 import json
 import re
+import sys
+import urllib.request
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -100,6 +102,21 @@ TAGGING_COLUMNS = [
     "Region",
     "VpcId",
     "MissingTags",
+]
+
+EKS_COLUMNS = [
+    "ClusterName",
+    "Account",
+    "Region",
+    "K8sVersion",
+    "ClusterStatus",
+    "NodeGroup",
+    "DesiredNodes",
+    "MinNodes",
+    "MaxNodes",
+    "InstanceTypes",
+    "CapacityType",
+    "NodeGroupStatus",
 ]
 
 
@@ -413,6 +430,223 @@ def load_reserved(entry):
     return rows
 
 
+def load_history(path):
+    if not path:
+        return {"snapshots": []}
+    history_path = Path(path)
+    if not history_path.exists():
+        return {"snapshots": []}
+    try:
+        with open(history_path) as handle:
+            data = json.load(handle)
+        if "snapshots" not in data:
+            return {"snapshots": []}
+        return data
+    except Exception:
+        return {"snapshots": []}
+
+
+def save_history(path, history, ec2_rows, rds_rows, findings, changes, tagging_rows, generated_at):
+    if not path:
+        return
+    running_rows = [row for row in ec2_rows if row.get("State") == "running"]
+    stopped_rows = [row for row in ec2_rows if row.get("State") == "stopped"]
+    monthly_cost = sum(float(row.get("EstimatedMonthlyCostUSD") or 0) for row in running_rows)
+    high_findings = sum(1 for row in findings if row.get("Severity") == "High")
+    medium_findings = sum(1 for row in findings if row.get("Severity") == "Medium")
+    low_findings = sum(1 for row in findings if row.get("Severity") == "Low")
+    snapshot = {
+        "generated_at": generated_at,
+        "ec2_running": len(running_rows),
+        "ec2_stopped": len(stopped_rows),
+        "monthly_cost": round(monthly_cost, 2),
+        "high_findings": high_findings,
+        "medium_findings": medium_findings,
+        "low_findings": low_findings,
+        "untagged": len(tagging_rows),
+        "rds_count": len(rds_rows),
+        "change_count": len(changes),
+    }
+    history["snapshots"].append(snapshot)
+    history["snapshots"] = history["snapshots"][-90:]
+    history_path = Path(path)
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(history_path, "w", encoding="utf-8") as handle:
+        json.dump(history, handle, indent=2, sort_keys=True)
+
+
+def trends_content(history):
+    snapshots = history.get("snapshots", [])
+    if len(snapshots) < 2:
+        return '<div class="empty">Trend graphs appear after two or more scans have completed. Run InfraGlance again after your next scheduled scan to see historical trends.</div>'
+
+    history_json = json.dumps(snapshots)
+
+    return f"""
+<div class="trend-grid">
+  <div class="trend-card">
+    <h3>EC2 Instances</h3>
+    <div class="chart-legend">
+      <span><span class="legend-dot" style="background:#0B3C5D"></span>Running</span>
+      <span><span class="legend-dot" style="background:#F5B041"></span>Stopped</span>
+    </div>
+    <div id="chart-ec2" class="chart-area"></div>
+  </div>
+  <div class="trend-card">
+    <h3>Estimated Monthly Cost</h3>
+    <div id="chart-cost" class="chart-area"></div>
+  </div>
+  <div class="trend-card">
+    <h3>Security Findings</h3>
+    <div class="chart-legend">
+      <span><span class="legend-dot" style="background:#c0392b"></span>High</span>
+      <span><span class="legend-dot" style="background:#F5B041"></span>Medium</span>
+      <span><span class="legend-dot" style="background:#27ae60"></span>Low</span>
+    </div>
+    <div id="chart-findings" class="chart-area"></div>
+  </div>
+  <div class="trend-card">
+    <h3>Untagged Resources</h3>
+    <div id="chart-untagged" class="chart-area"></div>
+  </div>
+</div>
+<script>
+(function() {{
+  var HISTORY = {history_json};
+  if (!HISTORY || HISTORY.length < 2) return;
+  function drawChart(id, series) {{
+    var el = document.getElementById(id);
+    if (!el) return;
+    var W = el.clientWidth || 560, H = 180;
+    var pad = {{t:12, r:16, b:32, l:48}};
+    var cW = W - pad.l - pad.r, cH = H - pad.t - pad.b;
+    var n = HISTORY.length;
+    var allVals = series.reduce(function(a,s){{ return a.concat(HISTORY.map(function(d){{return d[s.key]||0;}})); }}, []);
+    var maxV = Math.max.apply(null, allVals) || 1;
+    var minV = Math.min.apply(null, allVals.concat([0]));
+    var rng = maxV - minV || 1;
+    function xS(i){{ return pad.l + (n > 1 ? (i/(n-1))*cW : cW/2); }}
+    function yS(v){{ return pad.t + cH - ((v-minV)/rng)*cH; }}
+    var svg = '<svg viewBox="0 0 '+W+' '+H+'" xmlns="http://www.w3.org/2000/svg">';
+    for (var t=0;t<=4;t++) {{
+      var gy = pad.t + (t/4)*cH;
+      var gv = Math.round(maxV - (t/4)*rng);
+      svg += '<line x1="'+pad.l+'" y1="'+gy+'" x2="'+(pad.l+cW)+'" y2="'+gy+'" stroke="rgba(11,60,93,.1)" stroke-width="1"/>';
+      svg += '<text x="'+(pad.l-4)+'" y="'+(gy+4)+'" text-anchor="end" font-size="10" fill="rgba(11,60,93,.55)">'+gv+'</text>';
+    }}
+    var step = Math.max(1, Math.ceil(n/7));
+    for (var i=0;i<n;i+=step) {{
+      var lbl = String(HISTORY[i].generated_at||'').substring(0,10);
+      svg += '<text x="'+xS(i)+'" y="'+(pad.t+cH+14)+'" text-anchor="middle" font-size="9" fill="rgba(11,60,93,.5)">'+lbl+'</text>';
+    }}
+    series.forEach(function(s) {{
+      var pts = HISTORY.map(function(d,i){{ return xS(i)+','+yS(d[s.key]||0); }}).join(' ');
+      svg += '<polyline points="'+pts+'" fill="none" stroke="'+s.color+'" stroke-width="2" stroke-linejoin="round"/>';
+      HISTORY.forEach(function(d,i){{
+        svg += '<circle cx="'+xS(i)+'" cy="'+yS(d[s.key]||0)+'" r="3" fill="'+s.color+'" />';
+      }});
+    }});
+    svg += '</svg>';
+    el.innerHTML = svg;
+  }}
+  drawChart('chart-ec2', [{{key:'ec2_running',color:'#0B3C5D'}},{{key:'ec2_stopped',color:'#F5B041'}}]);
+  drawChart('chart-cost', [{{key:'monthly_cost',color:'#27ae60'}}]);
+  drawChart('chart-findings', [{{key:'high_findings',color:'#c0392b'}},{{key:'medium_findings',color:'#F5B041'}},{{key:'low_findings',color:'#27ae60'}}]);
+  drawChart('chart-untagged', [{{key:'untagged',color:'#8e44ad'}}]);
+}})();
+</script>
+"""
+
+
+def load_eks(entry):
+    with open(entry["path"]) as handle:
+        payload = json.load(handle)
+    rows = []
+    for cluster in payload.get("Clusters", []):
+        cluster_name = cluster.get("name", "")
+        k8s_version = cluster.get("version", "")
+        cluster_status = cluster.get("status", "")
+        nodegroups = cluster.get("nodegroups", [])
+        if not nodegroups:
+            rows.append({
+                "ClusterName": cluster_name,
+                "Account": entry["account"],
+                "Region": entry["region"],
+                "K8sVersion": k8s_version,
+                "ClusterStatus": cluster_status,
+                "NodeGroup": "",
+                "DesiredNodes": "",
+                "MinNodes": "",
+                "MaxNodes": "",
+                "InstanceTypes": "",
+                "CapacityType": "",
+                "NodeGroupStatus": "",
+                "__RowClass": "",
+            })
+        else:
+            for ng in nodegroups:
+                scaling = ng.get("scalingConfig", {})
+                instance_types = ", ".join(ng.get("instanceTypes") or [])
+                capacity = ng.get("capacityType", "")
+                rows.append({
+                    "ClusterName": cluster_name,
+                    "Account": entry["account"],
+                    "Region": entry["region"],
+                    "K8sVersion": k8s_version,
+                    "ClusterStatus": cluster_status,
+                    "NodeGroup": ng.get("nodegroupName", ""),
+                    "DesiredNodes": scaling.get("desiredSize", ""),
+                    "MinNodes": scaling.get("minSize", ""),
+                    "MaxNodes": scaling.get("maxSize", ""),
+                    "InstanceTypes": instance_types,
+                    "CapacityType": capacity,
+                    "NodeGroupStatus": ng.get("status", ""),
+                    "__RowClass": "row-spot" if capacity == "SPOT" else "",
+                })
+    return rows
+
+
+def eks_content(eks_rows):
+    cluster_names = {row.get("ClusterName") for row in eks_rows if row.get("ClusterName")}
+    spot_count = sum(1 for r in eks_rows if r.get("CapacityType") == "SPOT")
+    metrics = (
+        '<div class="summary">'
+        f'<div class="metric"><span>Clusters</span><strong>{len(cluster_names)}</strong></div>'
+        f'<div class="metric"><span>Node Groups</span><strong>{len(eks_rows)}</strong></div>'
+        f'<div class="metric"><span>Spot Node Groups</span><strong>{spot_count}</strong></div>'
+        '</div>'
+    )
+    if not eks_rows:
+        return metrics + '<div class="empty">No EKS clusters found in scanned accounts and regions.</div>'
+    return metrics + table_html("eks", EKS_COLUMNS, eks_rows)
+
+
+def post_slack_notification(webhook_url, ec2_rows, rds_rows, findings, changes, tagging_rows):
+    if not webhook_url:
+        return
+    running = sum(1 for row in ec2_rows if row.get("State") == "running")
+    stopped = sum(1 for row in ec2_rows if row.get("State") == "stopped")
+    cost = sum(float(row.get("EstimatedMonthlyCostUSD") or 0) for row in ec2_rows if row.get("State") == "running")
+    high = sum(1 for row in findings if row.get("Severity") == "High")
+    medium = sum(1 for row in findings if row.get("Severity") == "Medium")
+    new_changes = sum(1 for row in changes if row.get("ChangeType") == "New")
+    untagged = len(tagging_rows)
+    severity_icon = "\U0001f534" if high > 0 else "\U0001f7e1" if medium > 0 else "\U0001f7e2"
+    text = (
+        f"InfraGlance scan complete {severity_icon} — {running} EC2 running, {stopped} stopped"
+        f" | Est. ${cost:,.0f}/mo"
+        f" | Findings: {high} High, {medium} Medium"
+        f" | Changes: +{new_changes}"
+        f" | Untagged: {untagged}"
+    )
+    try:
+        payload = json.dumps({"text": text}).encode()
+        req = urllib.request.Request(webhook_url, data=payload, headers={"Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=10)
+    except Exception as exc:
+        print(f"Slack notification failed: {exc}", file=sys.stderr)
+
+
 def apply_ri_coverage(ec2_rows, reserved_rows):
     coverage = defaultdict(int)
     for row in reserved_rows:
@@ -459,12 +693,14 @@ def esc(value):
 def nav(active):
     links = [
         ("summary.html", "Summary"),
+        ("trends.html", "Trends"),
         ("findings.html", "Security Findings"),
         ("tags.html", "Tagging"),
         ("changes.html", "Changes"),
         ("index.html", "EC2"),
         ("rds.html", "RDS"),
         ("reserved.html", "Reserved Instances"),
+        ("eks.html", "EKS"),
     ]
     return "".join(
         f'<a class="{"active" if label == active else ""}" href="{href}">{label}</a>'
@@ -614,6 +850,15 @@ def page(title, active, generated_at, content):
     td.sev-medium {{ background: rgba(245,176,65,.2); color: #7d5a00; font-weight: 600; text-align: center; }}
     td.sev-low {{ color: rgba(11,60,93,.7); text-align: center; }}
     td.sev-zero {{ color: rgba(11,60,93,.3); text-align: center; }}
+    .trend-grid {{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-top: 8px; }}
+    @media (max-width: 860px) {{ .trend-grid {{ grid-template-columns: 1fr; }} }}
+    .trend-card {{ background: var(--white); border: 1px solid rgba(11,60,93,.28); border-radius: 8px; padding: 16px 18px; }}
+    .trend-card h3 {{ margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }}
+    .chart-area {{ width: 100%; height: 180px; }}
+    .chart-area svg {{ width: 100%; height: 100%; }}
+    .chart-legend {{ font-size: 11px; margin-bottom: 6px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }}
+    .legend-dot {{ display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 2px; vertical-align: middle; }}
+    tr.row-spot td:first-child {{ box-shadow: inset 4px 0 0 #8e44ad; }}
   </style>
 </head>
 <body>
@@ -1438,6 +1683,8 @@ def main():
     parser.add_argument("--redact-db-names", default="false")
     parser.add_argument("--redact-vpc-cidrs", default="false")
     parser.add_argument("--required-tags", default="")
+    parser.add_argument("--history-file", default="")
+    parser.add_argument("--slack-webhook-url", default="")
     args = parser.parse_args()
     args.redact_private_ips = str_to_bool(args.redact_private_ips)
     args.redact_public_ips = str_to_bool(args.redact_public_ips)
@@ -1448,9 +1695,10 @@ def main():
     args.required_tags = [t.strip() for t in args.required_tags.split(",") if t.strip()] if args.required_tags else []
     pricing = load_pricing(args.pricing_file)
     now = datetime.now(timezone.utc)
+    history = load_history(args.history_file) if args.history_file else {"snapshots": []}
 
     env_by_vpc, configured_vpcs = read_vpc_map(args.vpcs)
-    ec2_rows, rds_rows, reserved_rows, vpc_rows, security_group_rows = [], [], [], [], []
+    ec2_rows, rds_rows, reserved_rows, vpc_rows, security_group_rows, eks_rows = [], [], [], [], [], []
 
     for entry in read_manifest(args.manifest):
         if entry["resource"] == "vpc":
@@ -1475,6 +1723,8 @@ def main():
             rds_rows.extend(load_rds(entry, env_by_vpc, vpc_details))
         elif entry["resource"] == "reserved":
             reserved_rows.extend(load_reserved(entry))
+        elif entry["resource"] == "eks":
+            eks_rows.extend(load_eks(entry))
 
     apply_ri_coverage(ec2_rows, reserved_rows)
     findings = security_findings(ec2_rows, rds_rows, vpc_rows, security_group_rows, args.stopped_red_days)
@@ -1485,6 +1735,9 @@ def main():
     summary_rows = account_summary_rows(ec2_rows, rds_rows, findings, tagging_rows)
 
     apply_redaction(ec2_rows, rds_rows, vpc_rows, findings, changes, tagging_rows, args)
+
+    if args.history_file:
+        save_history(args.history_file, history, ec2_rows, rds_rows, findings, changes, tagging_rows, args.generated_at)
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -1520,8 +1773,17 @@ def main():
         page(args.title, "Reserved Instances", args.generated_at, table_html("reserved", RESERVED_COLUMNS, reserved_rows)),
         encoding="utf-8",
     )
+    (output_dir / "trends.html").write_text(
+        page(args.title, "Trends", args.generated_at, trends_content(history)),
+        encoding="utf-8",
+    )
+    (output_dir / "eks.html").write_text(
+        page(args.title, "EKS", args.generated_at, eks_content(eks_rows)),
+        encoding="utf-8",
+    )
     if args.state_file:
         write_state(args.state_file, args.generated_at, current_state)
+    post_slack_notification(args.slack_webhook_url, ec2_rows, rds_rows, findings, changes, tagging_rows)
 
 
 if __name__ == "__main__":

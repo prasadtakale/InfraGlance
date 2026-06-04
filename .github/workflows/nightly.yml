@@ -1,0 +1,62 @@
+name: InfraGlance Nightly Scan
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Fetch previous history from S3
+        run: |
+          mkdir -p site
+          aws s3 cp s3://${{ secrets.S3_BUCKET }}/infraglance/infraglance-history.json site/infraglance-history.json 2>/dev/null || true
+        continue-on-error: true
+
+      - name: Create config
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          S3_BUCKET: ${{ secrets.S3_BUCKET }}
+        run: |
+          cp infraglance.conf.example infraglance.conf
+          # CUSTOMIZE: replace the ACCOUNTS and per-account settings below
+          # with your actual account IDs, roles, and regions.
+          # Store sensitive values in GitHub repository secrets.
+          cat >> infraglance.conf << EOF
+          S3_BUCKET="${S3_BUCKET}"
+          S3_PREFIX="infraglance"
+          SLACK_WEBHOOK_URL="${SLACK_WEBHOOK_URL}"
+          ACCOUNTS=("main")
+          ACCOUNT_main_LABEL="Main"
+          ACCOUNT_main_ROLE_ARN="${{ secrets.AWS_ROLE_ARN }}"
+          ACCOUNT_main_REGIONS=("us-east-1")
+          EOF
+
+      - name: Run InfraGlance
+        run: bash infraglance.sh
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: infraglance-report-${{ github.run_number }}
+          path: site/
+          retention-days: 30
