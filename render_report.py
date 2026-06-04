@@ -91,6 +91,17 @@ VPC_COLUMNS = [
     "InstanceTenancy",
 ]
 
+TAGGING_COLUMNS = [
+    "ResourceType",
+    "ResourceId",
+    "Name",
+    "Account",
+    "Environment",
+    "Region",
+    "VpcId",
+    "MissingTags",
+]
+
 
 def str_to_bool(value):
     return str(value).lower() in {"1", "true", "yes", "on"}
@@ -163,7 +174,7 @@ def redact_name(value):
     return "REDACTED" if value else ""
 
 
-def apply_redaction(ec2_rows, rds_rows, vpc_rows, findings, changes, options):
+def apply_redaction(ec2_rows, rds_rows, vpc_rows, findings, changes, tagging_rows, options):
     if options.redact_instance_names:
         for row in ec2_rows:
             row["Name"] = redact_name(row.get("Name", ""))
@@ -193,6 +204,17 @@ def apply_redaction(ec2_rows, rds_rows, vpc_rows, findings, changes, options):
                 row["ResourceId"] = redact_name(row.get("ResourceId", ""))
         for row in changes:
             if row.get("ResourceType") == "RDS":
+                row["ResourceId"] = redact_name(row.get("ResourceId", ""))
+
+    if options.redact_instance_names:
+        for row in tagging_rows:
+            if row.get("ResourceType") == "EC2":
+                row["Name"] = redact_name(row.get("Name", ""))
+
+    if options.redact_db_names:
+        for row in tagging_rows:
+            if row.get("ResourceType") == "RDS":
+                row["Name"] = redact_name(row.get("Name", ""))
                 row["ResourceId"] = redact_name(row.get("ResourceId", ""))
 
 
@@ -333,6 +355,7 @@ def load_ec2(entry, env_by_vpc, vpc_details, pricing, monthly_hours, now, stoppe
                     "StoppedDays": stopped_days,
                     "EstimatedMonthlyCostUSD": monthly_cost,
                     "RICoverage": "",
+                    "__Tags": {t.get("Key", ""): t.get("Value", "") for t in (instance.get("Tags") or [])},
                 }
             )
     return rows
@@ -363,6 +386,7 @@ def load_rds(entry, env_by_vpc, vpc_details):
                 "StorageType": instance.get("StorageType", ""),
                 "AllocatedStorage": instance.get("AllocatedStorage", ""),
                 "AvailabilityZone": instance.get("AvailabilityZone", ""),
+                "__TagList": {t.get("Key", ""): t.get("Value", "") for t in (instance.get("TagList") or [])},
             }
         )
     return rows
@@ -434,7 +458,9 @@ def esc(value):
 
 def nav(active):
     links = [
+        ("summary.html", "Summary"),
         ("findings.html", "Security Findings"),
+        ("tags.html", "Tagging"),
         ("changes.html", "Changes"),
         ("index.html", "EC2"),
         ("rds.html", "RDS"),
@@ -453,12 +479,13 @@ def table_html(table_id, columns, rows):
         cells = "".join(f"<td>{esc(row.get(column, ''))}</td>" for column in columns)
         row_class = row.get("__RowClass", "")
         class_attr = f' class="{esc(row_class)}"' if row_class else ""
-        body.append(f"<tr{class_attr}>{cells}</tr>")
+        account_attr = f' data-account="{esc(row.get("Account", ""))}"'
+        body.append(f"<tr{class_attr}{account_attr}>{cells}</tr>")
     return f"""
     <div class="table-tools">
       <input type="search" data-table="{table_id}" placeholder="Search table">
       <button type="button" data-export="{table_id}">Export CSV</button>
-      <span>{len(rows)} rows</span>
+      <span data-row-count="{table_id}">{len(rows)} rows</span>
     </div>
     <div class="table-wrap">
       <table id="{table_id}">
@@ -467,6 +494,56 @@ def table_html(table_id, columns, rows):
       </table>
     </div>
     """
+
+
+def changes_table_html(rows):
+    columns = CHANGE_COLUMNS
+    head = "".join(f"<th>{esc(column)}</th>" for column in columns)
+    body = []
+    badge_map = {
+        "New": '<span class="badge badge-new">NEW</span>',
+        "Removed": '<span class="badge badge-removed">REMOVED</span>',
+        "Changed": '<span class="badge badge-changed">CHANGED</span>',
+    }
+    for row in rows:
+        cells = []
+        for column in columns:
+            if column == "ChangeType":
+                badge = badge_map.get(row.get("ChangeType", ""), esc(row.get("ChangeType", "")))
+                cells.append(f"<td>{badge}</td>")
+            else:
+                cells.append(f"<td>{esc(row.get(column, ''))}</td>")
+        row_class = row.get("__RowClass", "")
+        class_attr = f' class="{esc(row_class)}"' if row_class else ""
+        account_attr = f' data-account="{esc(row.get("Account", ""))}"'
+        body.append(f"<tr{class_attr}{account_attr}>{''.join(cells)}</tr>")
+    return f"""
+    <div class="table-tools">
+      <input type="search" data-table="changes" placeholder="Search table">
+      <button type="button" data-export="changes">Export CSV</button>
+      <span data-row-count="changes">{len(rows)} rows</span>
+    </div>
+    <div class="table-wrap">
+      <table id="changes">
+        <thead><tr>{head}</tr></thead>
+        <tbody>{''.join(body)}</tbody>
+      </table>
+    </div>
+    """
+
+
+def changes_content(changes):
+    counts = defaultdict(int)
+    for row in changes:
+        counts[row.get("ChangeType", "")] += 1
+    metrics = (
+        '<div class="summary">'
+        f'<div class="metric"><span>New</span><strong>{counts["New"]}</strong></div>'
+        f'<div class="metric"><span>Removed</span><strong>{counts["Removed"]}</strong></div>'
+        f'<div class="metric"><span>Changed</span><strong>{counts["Changed"]}</strong></div>'
+        '</div>'
+    )
+    return metrics + changes_table_html(changes)
 
 
 def page(title, active, generated_at, content):
@@ -501,6 +578,9 @@ def page(title, active, generated_at, content):
     .metric {{ background: var(--white); border: 1px solid rgba(11, 60, 93, 0.28); border-left: 5px solid var(--gold); border-radius: 6px; padding: 10px 14px; min-width: 156px; font-size: 16px; }}
     .metric strong {{ display: block; font-size: 20px; margin-top: 3px; }}
     .table-tools {{ display: flex; gap: 10px; align-items: center; margin: 10px 0 10px; flex-wrap: wrap; }}
+    .report-filter {{ display: flex; gap: 8px; align-items: center; margin-top: 12px; flex-wrap: wrap; font-size: 14px; }}
+    .report-filter label {{ font-weight: 700; }}
+    .report-filter select {{ padding: 8px 10px; border: 1px solid rgba(11, 60, 93, 0.65); border-radius: 4px; color: var(--blue); background: var(--white); font-size: 14px; }}
     input[type="search"] {{ min-width: 284px; padding: 9px 12px; border: 1px solid rgba(11, 60, 93, 0.55); border-radius: 4px; color: var(--blue); font-size: 14px; }}
     button {{ padding: 9px 13px; border: 1px solid var(--blue); border-radius: 4px; background: var(--blue); color: var(--white); cursor: pointer; font-weight: 600; font-size: 14px; }}
     button:hover {{ background: var(--gold); color: var(--blue); }}
@@ -516,6 +596,24 @@ def page(title, active, generated_at, content):
     tr.row-stopped-red td:first-child {{ box-shadow: inset 6px 0 0 var(--gold); font-weight: 600; }}
     tr.row-ri-gap td:first-child {{ box-shadow: inset 4px 0 0 var(--gold); }}
     .empty {{ background: var(--white); border: 1px solid rgba(11, 60, 93, 0.28); border-left: 5px solid var(--gold); border-radius: 6px; padding: 16px; font-size: 15px; }}
+    .badge {{ display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 11px; font-weight: 700; letter-spacing: .5px; }}
+    .badge-new {{ background: #27ae60; color: #fff; }}
+    .badge-removed {{ background: #c0392b; color: #fff; }}
+    .badge-changed {{ background: var(--gold); color: var(--blue); }}
+    tr.row-change-new td {{ background: rgba(39,174,96,.06); }}
+    tr.row-change-new td:first-child {{ box-shadow: inset 4px 0 0 #27ae60; }}
+    tr.row-change-removed td {{ background: rgba(192,57,43,.06); }}
+    tr.row-change-removed td:first-child {{ box-shadow: inset 4px 0 0 #c0392b; }}
+    tr.row-change-changed td:first-child {{ box-shadow: inset 4px 0 0 var(--gold); }}
+    .cell-high {{ background: rgba(192,57,43,.15); color: #c0392b; font-weight: 700; text-align: center; }}
+    .cell-medium {{ background: rgba(245,176,65,.25); color: #7d5a00; font-weight: 700; text-align: center; }}
+    .cell-low {{ background: rgba(39,174,96,.12); color: #1a7a45; font-weight: 600; text-align: center; }}
+    .cell-zero {{ color: rgba(11,60,93,.3); text-align: center; }}
+    code {{ background: rgba(11,60,93,.08); padding: 1px 5px; border-radius: 3px; font-family: monospace; font-size: 12px; }}
+    td.sev-high {{ background: rgba(192,57,43,.12); color: #c0392b; font-weight: 700; text-align: center; }}
+    td.sev-medium {{ background: rgba(245,176,65,.2); color: #7d5a00; font-weight: 600; text-align: center; }}
+    td.sev-low {{ color: rgba(11,60,93,.7); text-align: center; }}
+    td.sev-zero {{ color: rgba(11,60,93,.3); text-align: center; }}
   </style>
 </head>
 <body>
@@ -523,6 +621,12 @@ def page(title, active, generated_at, content):
     <h1>{esc(title)}</h1>
     <div>Generated at {esc(generated_at)}</div>
     <nav>{nav(active)}</nav>
+    <div class="report-filter">
+      <label for="accountFilter">Account/Profile</label>
+      <select id="accountFilter">
+        <option value="__all__">All accounts</option>
+      </select>
+    </div>
   </header>
   <main>{content}</main>
   <script>
@@ -542,13 +646,77 @@ def page(title, active, generated_at, content):
         rows.forEach(row => tbody.appendChild(row));
       }});
     }});
+    function applyRowVisibility(row) {{
+      row.hidden = row.dataset.accountHidden === 'true' || row.dataset.searchHidden === 'true';
+    }}
+    function updateRowCount(table) {{
+      const count = Array.from(table.querySelectorAll('tbody tr')).filter(row => !row.hidden).length;
+      const counter = document.querySelector('[data-row-count="' + table.id + '"]');
+      if (counter) {{
+        counter.textContent = count + ' rows';
+      }}
+    }}
+    function updateAllRowCounts() {{
+      document.querySelectorAll('table[id]').forEach(updateRowCount);
+    }}
+    function setEc2Summary(name, value) {{
+      const target = document.querySelector('[data-ec2-summary="' + name + '"]');
+      if (target) {{
+        target.textContent = value;
+      }}
+    }}
+    function updateEc2Summary() {{
+      const rows = Array.from(document.querySelectorAll('table[id^="ec2_"] tbody tr[data-account]'))
+        .filter(row => row.dataset.accountHidden !== 'true');
+      let running = 0;
+      let stopped = 0;
+      let monthlyCost = 0;
+      let riApplicable = 0;
+      let riCovered = 0;
+      let riGaps = 0;
+      rows.forEach(function(row) {{
+        const state = cellText(row, 7).toLowerCase();
+        const cost = parseFloat(cellText(row, 15));
+        const coverage = cellText(row, 16);
+        if (state === 'running') {{
+          running += 1;
+        }}
+        if (state === 'stopped') {{
+          stopped += 1;
+        }}
+        if (!Number.isNaN(cost)) {{
+          monthlyCost += cost;
+        }}
+        if (coverage === 'Covered' || coverage === 'Gap') {{
+          riApplicable += 1;
+          if (coverage === 'Covered') {{
+            riCovered += 1;
+          }}
+          if (coverage === 'Gap') {{
+            riGaps += 1;
+          }}
+        }}
+      }});
+      const visibleVpcs = Array.from(document.querySelectorAll('.vpc-tab[data-tab-group="ec2_vpcs"]'))
+        .filter(tab => !tab.hidden).length;
+      const coveragePct = riApplicable ? ((riCovered / riApplicable) * 100).toFixed(1) : '0';
+      setEc2Summary('total', rows.length);
+      setEc2Summary('running', running);
+      setEc2Summary('stopped', stopped);
+      setEc2Summary('cost', '$' + monthlyCost.toFixed(2));
+      setEc2Summary('coverage', coveragePct + '%');
+      setEc2Summary('gaps', riGaps);
+      setEc2Summary('vpcs', visibleVpcs);
+    }}
     document.querySelectorAll('input[type="search"][data-table]').forEach(function(input) {{
       input.addEventListener('input', function() {{
         const table = document.getElementById(input.dataset.table);
         const query = input.value.toLowerCase();
         table.querySelectorAll('tbody tr').forEach(function(row) {{
-          row.hidden = !row.textContent.toLowerCase().includes(query);
+          row.dataset.searchHidden = query && !row.textContent.toLowerCase().includes(query) ? 'true' : 'false';
+          applyRowVisibility(row);
         }});
+        updateRowCount(table);
       }});
     }});
     document.querySelectorAll('button[data-export]').forEach(function(button) {{
@@ -580,6 +748,66 @@ def page(title, active, generated_at, content):
         }});
       }});
     }});
+    function activateFirstVisibleVpcPanel(group) {{
+      const tabs = Array.from(document.querySelectorAll('.vpc-tab[data-tab-group="' + group + '"]')).filter(tab => !tab.hidden);
+      document.querySelectorAll('.vpc-tab[data-tab-group="' + group + '"]').forEach(function(tab) {{
+        tab.classList.remove('active');
+        tab.setAttribute('aria-selected', 'false');
+      }});
+      document.querySelectorAll('.vpc-panel[data-tab-group="' + group + '"]').forEach(function(panel) {{
+        panel.classList.remove('active');
+      }});
+      if (tabs.length) {{
+        const first = tabs[0];
+        first.classList.add('active');
+        first.setAttribute('aria-selected', 'true');
+        const panel = document.getElementById(first.dataset.tabTarget);
+        if (panel) {{
+          panel.classList.add('active');
+        }}
+      }}
+    }}
+    function updateAccountFilterOptions() {{
+      const select = document.getElementById('accountFilter');
+      if (!select) {{
+        return;
+      }}
+      const accounts = Array.from(document.querySelectorAll('[data-account]'))
+        .map(item => item.dataset.account)
+        .filter(Boolean)
+        .filter((value, index, values) => values.indexOf(value) === index)
+        .sort();
+      accounts.forEach(function(account) {{
+        const option = document.createElement('option');
+        option.value = account;
+        option.textContent = account;
+        select.appendChild(option);
+      }});
+      select.parentElement.hidden = accounts.length <= 1;
+    }}
+    function applyAccountFilter() {{
+      const select = document.getElementById('accountFilter');
+      const selected = select ? select.value : '__all__';
+      document.querySelectorAll('tbody tr[data-account]').forEach(function(row) {{
+        row.dataset.accountHidden = selected !== '__all__' && row.dataset.account !== selected ? 'true' : 'false';
+        applyRowVisibility(row);
+      }});
+      document.querySelectorAll('.vpc-tab[data-account]').forEach(function(tab) {{
+        tab.hidden = selected !== '__all__' && tab.dataset.account !== selected;
+      }});
+      document.querySelectorAll('.vpc-panel[data-account]').forEach(function(panel) {{
+        panel.hidden = selected !== '__all__' && panel.dataset.account !== selected;
+      }});
+      Array.from(new Set(Array.from(document.querySelectorAll('.vpc-tab[data-tab-group]')).map(tab => tab.dataset.tabGroup))).forEach(activateFirstVisibleVpcPanel);
+      updateAllRowCounts();
+      updateEc2Summary();
+    }}
+    updateAccountFilterOptions();
+    const accountFilter = document.getElementById('accountFilter');
+    if (accountFilter) {{
+      accountFilter.addEventListener('change', applyAccountFilter);
+      applyAccountFilter();
+    }}
   </script>
 </body>
 </html>
@@ -647,13 +875,13 @@ def vpc_resource_sections(resource, columns, resource_rows, vpc_rows):
         summary = ec2_summary(resource_rows)
         sections = [
             '<div class="summary">'
-            f'<div class="metric"><span>Total EC2</span><strong>{len(resource_rows)}</strong></div>'
-            f'<div class="metric"><span>Running</span><strong>{summary["running_count"]}</strong></div>'
-            f'<div class="metric"><span>Stopped</span><strong>{summary["stopped_count"]}</strong></div>'
-            f'<div class="metric"><span>Monthly Est.</span><strong>${summary["monthly_cost"]}</strong></div>'
-            f'<div class="metric"><span>RI Coverage</span><strong>{summary["ri_coverage_pct"]}%</strong></div>'
-            f'<div class="metric"><span>RI Gaps</span><strong>{summary["ri_gap_count"]}</strong></div>'
-            f'<div class="metric"><span>VPCs</span><strong>{len(vpcs_by_key)}</strong></div>'
+            f'<div class="metric"><span>Total EC2</span><strong data-ec2-summary="total">{len(resource_rows)}</strong></div>'
+            f'<div class="metric"><span>Running</span><strong data-ec2-summary="running">{summary["running_count"]}</strong></div>'
+            f'<div class="metric"><span>Stopped</span><strong data-ec2-summary="stopped">{summary["stopped_count"]}</strong></div>'
+            f'<div class="metric"><span>Monthly Est.</span><strong data-ec2-summary="cost">${summary["monthly_cost"]}</strong></div>'
+            f'<div class="metric"><span>RI Coverage</span><strong data-ec2-summary="coverage">{summary["ri_coverage_pct"]}%</strong></div>'
+            f'<div class="metric"><span>RI Gaps</span><strong data-ec2-summary="gaps">{summary["ri_gap_count"]}</strong></div>'
+            f'<div class="metric"><span>VPCs</span><strong data-ec2-summary="vpcs">{len(vpcs_by_key)}</strong></div>'
             '</div>'
         ]
     else:
@@ -690,10 +918,12 @@ def vpc_resource_sections(resource, columns, resource_rows, vpc_rows):
             )
         tabs.append(
             f'<button type="button" class="vpc-tab{active_class}" data-tab-group="{tab_group}" '
-            f'data-tab-target="{panel_id}" aria-selected="{selected}">{esc(vpc_tab_label(vpc))}</button>'
+            f'data-tab-target="{panel_id}" data-account="{esc(vpc.get("Account", ""))}" '
+            f'aria-selected="{selected}">{esc(vpc_tab_label(vpc))}</button>'
         )
         panels.append(
-            f'<section id="{panel_id}" class="vpc-panel{active_class}" data-tab-group="{tab_group}">'
+            f'<section id="{panel_id}" class="vpc-panel{active_class}" data-tab-group="{tab_group}" '
+            f'data-account="{esc(vpc.get("Account", ""))}">'
             f'<div class="vpc-title"><h2>{esc(vpc_label(vpc))}</h2>'
             f'<div class="vpc-meta">{esc(vpc.get("Account", ""))} / {esc(vpc.get("Environment", ""))} / {esc(vpc.get("Region", ""))}</div></div>'
             f'{vpc_summary_html}'
@@ -859,6 +1089,50 @@ def security_findings(ec2_rows, rds_rows, vpc_rows, security_group_rows, stopped
     return sorted(findings, key=lambda item: (severity_order.get(item["Severity"], 9), item["Account"], item["Region"], item["Finding"]))
 
 
+def findings_heatmap_html(findings):
+    if not findings:
+        return ""
+    heatmap = {}
+    for finding in findings:
+        account = finding.get("Account", "")
+        vpc_id = finding.get("VpcId", "") or ""
+        label = f"{account} / {vpc_id}" if vpc_id else f"{account} / No VPC"
+        if label not in heatmap:
+            heatmap[label] = {"High": 0, "Medium": 0, "Low": 0}
+        sev = finding.get("Severity", "")
+        if sev in heatmap[label]:
+            heatmap[label][sev] += 1
+    sorted_rows = sorted(
+        heatmap.items(),
+        key=lambda item: (-item[1]["High"], -item[1]["Medium"], -item[1]["Low"], item[0]),
+    )
+    rows_html = []
+    for label, counts in sorted_rows:
+        total = counts["High"] + counts["Medium"] + counts["Low"]
+        high_class = "cell-high" if counts["High"] > 0 else "cell-zero"
+        med_class = "cell-medium" if counts["Medium"] > 0 else "cell-zero"
+        low_class = "cell-low" if counts["Low"] > 0 else "cell-zero"
+        high_val = str(counts["High"]) if counts["High"] > 0 else "—"
+        med_val = str(counts["Medium"]) if counts["Medium"] > 0 else "—"
+        low_val = str(counts["Low"]) if counts["Low"] > 0 else "—"
+        rows_html.append(
+            f"<tr><td>{esc(label)}</td>"
+            f'<td class="{high_class}">{high_val}</td>'
+            f'<td class="{med_class}">{med_val}</td>'
+            f'<td class="{low_class}">{low_val}</td>'
+            f"<td style=\"text-align:center\">{total}</td></tr>"
+        )
+    return (
+        "<h3>Findings by VPC</h3>"
+        '<div class="table-wrap" style="margin-bottom:20px">'
+        "<table>"
+        "<thead><tr><th>Account / VPC</th><th>High</th><th>Medium</th><th>Low</th><th>Total</th></tr></thead>"
+        f"<tbody>{''.join(rows_html)}</tbody>"
+        "</table>"
+        "</div>"
+    )
+
+
 def findings_content(findings):
     counts = defaultdict(int)
     for finding in findings:
@@ -871,7 +1145,7 @@ def findings_content(findings):
         f'<div class="metric"><span>Low</span><strong>{counts["Low"]}</strong></div>'
         '</div>'
     )
-    return content + table_html("security_findings", FINDING_COLUMNS, findings)
+    return content + findings_heatmap_html(findings) + table_html("security_findings", FINDING_COLUMNS, findings)
 
 
 def resource_state(ec2_rows, rds_rows, vpc_rows, findings):
@@ -945,15 +1219,18 @@ def change_rows(previous, current):
     for key in sorted(set(current) - set(previous)):
         row = dict(current[key])
         row["ChangeType"] = "New"
+        row["__RowClass"] = "row-change-new"
         rows.append(row)
     for key in sorted(set(previous) - set(current)):
         row = dict(previous[key])
         row["ChangeType"] = "Removed"
+        row["__RowClass"] = "row-change-removed"
         rows.append(row)
     for key in sorted(set(current) & set(previous)):
         if current[key].get("Details") != previous[key].get("Details"):
             row = dict(current[key])
             row["ChangeType"] = "Changed"
+            row["__RowClass"] = "row-change-changed"
             row["Details"] = f'{previous[key].get("Details", "")} -> {current[key].get("Details", "")}'
             rows.append(row)
     return rows
@@ -964,6 +1241,181 @@ def write_state(path, generated_at, current):
     state_path.parent.mkdir(parents=True, exist_ok=True)
     with open(state_path, "w", encoding="utf-8") as handle:
         json.dump({"generated_at": generated_at, "resources": current}, handle, indent=2, sort_keys=True)
+
+
+def tagging_findings(ec2_rows, rds_rows, required_tags):
+    if not required_tags:
+        return []
+    rows = []
+    for row in ec2_rows:
+        tags = row.get("__Tags", {})
+        missing = [t for t in required_tags if not tags.get(t)]
+        if missing:
+            rows.append({
+                "ResourceType": "EC2",
+                "ResourceId": row.get("InstanceId", ""),
+                "Name": tags.get("Name", ""),
+                "Account": row.get("Account", ""),
+                "Environment": row.get("Environment", ""),
+                "Region": row.get("Region", ""),
+                "VpcId": row.get("VpcId", ""),
+                "MissingTags": ", ".join(missing),
+            })
+    for row in rds_rows:
+        tags = row.get("__TagList", {})
+        missing = [t for t in required_tags if not tags.get(t)]
+        if missing:
+            rows.append({
+                "ResourceType": "RDS",
+                "ResourceId": row.get("DBInstanceIdentifier", ""),
+                "Name": row.get("DBInstanceIdentifier", ""),
+                "Account": row.get("Account", ""),
+                "Environment": row.get("Environment", ""),
+                "Region": row.get("Region", ""),
+                "VpcId": row.get("VpcId", ""),
+                "MissingTags": ", ".join(missing),
+            })
+    return sorted(rows, key=lambda r: (r.get("Account", ""), r.get("ResourceType", ""), r.get("ResourceId", "")))
+
+
+def tagging_content(tagging_rows, required_tags):
+    if not required_tags:
+        return '<div class="empty">Tagging compliance is disabled. Set <code>REQUIRED_TAGS</code> in your config to enable this feature.</div>'
+    tags_html = " ".join(f"<code>{esc(t)}</code>" for t in required_tags)
+    metrics = (
+        '<div class="summary">'
+        f'<div class="metric"><span>Untagged Resources</span><strong>{len(tagging_rows)}</strong></div>'
+        f'<div class="metric"><span>Required Tags</span><strong>{len(required_tags)}</strong></div>'
+        '</div>'
+    )
+    note = f'<p style="margin: 0 0 12px; font-size: 13px;">Required tags: {tags_html}</p>'
+    return metrics + note + table_html("tagging", TAGGING_COLUMNS, tagging_rows)
+
+
+def account_summary_rows(ec2_rows, rds_rows, findings, tagging_rows):
+    accounts = {}
+
+    def get_account(name):
+        if name not in accounts:
+            accounts[name] = {
+                "Account": name,
+                "ec2_total": 0,
+                "running": 0,
+                "stopped": 0,
+                "monthly_est": 0.0,
+                "ri_covered": 0,
+                "ri_gap": 0,
+                "rds": 0,
+                "High": 0,
+                "Medium": 0,
+                "Low": 0,
+                "untagged": 0,
+            }
+        return accounts[name]
+
+    for row in ec2_rows:
+        entry = get_account(row.get("Account", ""))
+        entry["ec2_total"] += 1
+        state = row.get("State", "")
+        if state == "running":
+            entry["running"] += 1
+            entry["monthly_est"] += float(row.get("EstimatedMonthlyCostUSD") or 0)
+            coverage = row.get("RICoverage", "")
+            if coverage == "Covered":
+                entry["ri_covered"] += 1
+            elif coverage == "Gap":
+                entry["ri_gap"] += 1
+        elif state == "stopped":
+            entry["stopped"] += 1
+
+    for row in rds_rows:
+        entry = get_account(row.get("Account", ""))
+        entry["rds"] += 1
+
+    for row in findings:
+        entry = get_account(row.get("Account", ""))
+        sev = row.get("Severity", "")
+        if sev in ("High", "Medium", "Low"):
+            entry[sev] += 1
+
+    for row in tagging_rows:
+        entry = get_account(row.get("Account", ""))
+        entry["untagged"] += 1
+
+    result = []
+    for name in sorted(accounts):
+        entry = accounts[name]
+        running = entry["running"]
+        covered = entry["ri_covered"]
+        ri_coverage = f"{round((covered / running) * 100, 1)}%" if running else "N/A"
+        result.append({
+            "Account": name,
+            "EC2 Total": entry["ec2_total"],
+            "Running": running,
+            "Stopped": entry["stopped"],
+            "Monthly Est.": f"${entry['monthly_est']:.2f}",
+            "RI Coverage": ri_coverage,
+            "RI Gaps": entry["ri_gap"],
+            "RDS": entry["rds"],
+            "High": entry["High"],
+            "Medium": entry["Medium"],
+            "Low": entry["Low"],
+            "Untagged": entry["untagged"],
+        })
+    return result
+
+
+def summary_table_html(rows):
+    columns = ["Account", "EC2 Total", "Running", "Stopped", "Monthly Est.", "RI Coverage", "RI Gaps", "RDS", "High", "Medium", "Low", "Untagged"]
+    head = "".join(f"<th>{esc(column)}</th>" for column in columns)
+    body = []
+    sev_cols = {
+        "High": ("sev-high", "sev-zero"),
+        "Medium": ("sev-medium", "sev-zero"),
+        "Low": ("sev-low", "sev-zero"),
+    }
+    for row in rows:
+        cells = []
+        for column in columns:
+            value = row.get(column, "")
+            if column in sev_cols:
+                pos_class, zero_class = sev_cols[column]
+                cell_class = pos_class if value > 0 else zero_class
+                cells.append(f'<td class="{cell_class}">{esc(str(value))}</td>')
+            else:
+                cells.append(f"<td>{esc(str(value))}</td>")
+        account_attr = f' data-account="{esc(row.get("Account", ""))}"'
+        body.append(f"<tr{account_attr}>{''.join(cells)}</tr>")
+    return f"""
+    <div class="table-tools">
+      <input type="search" data-table="summary" placeholder="Search table">
+      <button type="button" data-export="summary">Export CSV</button>
+      <span data-row-count="summary">{len(rows)} rows</span>
+    </div>
+    <div class="table-wrap">
+      <table id="summary">
+        <thead><tr>{head}</tr></thead>
+        <tbody>{''.join(body)}</tbody>
+      </table>
+    </div>
+    """
+
+
+def summary_content(summary_rows):
+    total_ec2 = sum(r.get("EC2 Total", 0) for r in summary_rows)
+    total_running = sum(r.get("Running", 0) for r in summary_rows)
+    total_rds = sum(r.get("RDS", 0) for r in summary_rows)
+    total_high = sum(r.get("High", 0) for r in summary_rows)
+    metrics = (
+        '<div class="summary">'
+        f'<div class="metric"><span>Accounts</span><strong>{len(summary_rows)}</strong></div>'
+        f'<div class="metric"><span>Total EC2</span><strong>{total_ec2}</strong></div>'
+        f'<div class="metric"><span>Running</span><strong>{total_running}</strong></div>'
+        f'<div class="metric"><span>Total RDS</span><strong>{total_rds}</strong></div>'
+        f'<div class="metric"><span>High Findings</span><strong>{total_high}</strong></div>'
+        '</div>'
+    )
+    return metrics + summary_table_html(summary_rows)
 
 
 def main():
@@ -985,6 +1437,7 @@ def main():
     parser.add_argument("--redact-instance-names", default="false")
     parser.add_argument("--redact-db-names", default="false")
     parser.add_argument("--redact-vpc-cidrs", default="false")
+    parser.add_argument("--required-tags", default="")
     args = parser.parse_args()
     args.redact_private_ips = str_to_bool(args.redact_private_ips)
     args.redact_public_ips = str_to_bool(args.redact_public_ips)
@@ -992,6 +1445,7 @@ def main():
     args.redact_db_names = str_to_bool(args.redact_db_names)
     args.redact_vpc_cidrs = str_to_bool(args.redact_vpc_cidrs)
     args.auto_discover_vpcs = str_to_bool(args.auto_discover_vpcs)
+    args.required_tags = [t.strip() for t in args.required_tags.split(",") if t.strip()] if args.required_tags else []
     pricing = load_pricing(args.pricing_file)
     now = datetime.now(timezone.utc)
 
@@ -1027,8 +1481,10 @@ def main():
     current_state = resource_state(ec2_rows, rds_rows, vpc_rows, findings)
     previous_state = load_previous_state(args.state_file) if args.state_file else {}
     changes = change_rows(previous_state, current_state)
+    tagging_rows = tagging_findings(ec2_rows, rds_rows, args.required_tags)
+    summary_rows = account_summary_rows(ec2_rows, rds_rows, findings, tagging_rows)
 
-    apply_redaction(ec2_rows, rds_rows, vpc_rows, findings, changes, args)
+    apply_redaction(ec2_rows, rds_rows, vpc_rows, findings, changes, tagging_rows, args)
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -1036,12 +1492,20 @@ def main():
     if old_vpc_page.exists():
         old_vpc_page.unlink()
 
+    (output_dir / "summary.html").write_text(
+        page(args.title, "Summary", args.generated_at, summary_content(summary_rows)),
+        encoding="utf-8",
+    )
     (output_dir / "findings.html").write_text(
         page(args.title, "Security Findings", args.generated_at, findings_content(findings)),
         encoding="utf-8",
     )
+    (output_dir / "tags.html").write_text(
+        page(args.title, "Tagging", args.generated_at, tagging_content(tagging_rows, args.required_tags)),
+        encoding="utf-8",
+    )
     (output_dir / "changes.html").write_text(
-        page(args.title, "Changes", args.generated_at, table_html("changes", CHANGE_COLUMNS, changes)),
+        page(args.title, "Changes", args.generated_at, changes_content(changes)),
         encoding="utf-8",
     )
     (output_dir / "index.html").write_text(
