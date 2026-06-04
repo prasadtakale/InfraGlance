@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+
+# Source this file when you want temporary AWS role credentials in your shell:
+#   . ./assume_role arn:aws:iam::123456789012:role/read-only infraglance my-profile
+#
+# Arguments:
+#   1. Role ARN. If omitted, AWS_ROLE_ARN from infraglance.conf or the environment is used.
+#   2. Session name. Optional. Defaults to AWS_ROLE_SESSION_NAME or infraglance.
+#   3. Source AWS profile. Optional. Defaults to AWS_PROFILE.
+
+_infraglance_assume_role() {
+  local config_file="${INFRAGLANCE_CONFIG:-./infraglance.conf}"
+  if [[ -f "${config_file}" ]]; then
+    # shellcheck source=/dev/null
+    source "${config_file}"
+  fi
+
+  local role_arn="${1:-${AWS_ROLE_ARN:-}}"
+  local session_name="${2:-${AWS_ROLE_SESSION_NAME:-infraglance}}"
+  local source_profile="${3:-${AWS_PROFILE:-}}"
+
+  if [[ -z "${role_arn}" ]]; then
+    echo "Usage: . ./assume_role <role-arn> [session-name] [source-profile]" >&2
+    return 1
+  fi
+
+  local assume_args=(
+    sts assume-role
+    --role-arn "${role_arn}"
+    --role-session-name "${session_name}"
+    --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]'
+    --output text
+  )
+
+  if [[ -n "${source_profile}" ]]; then
+    assume_args+=(--profile "${source_profile}")
+  fi
+
+  local creds
+  if ! creds="$(aws "${assume_args[@]}")"; then
+    echo "Failed to assume role: ${role_arn}" >&2
+    return 1
+  fi
+
+  read -r AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN <<<"${creds}"
+  export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
+  echo "Assumed role: ${role_arn}"
+}
+
+_infraglance_assume_role "$@"
