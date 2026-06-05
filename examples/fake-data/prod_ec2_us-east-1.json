@@ -1,0 +1,28 @@
+{
+  "Reservations": [
+    {
+      "Instances": [
+        {
+          "InstanceId": "i-prod001",
+          "InstanceType": "m5.large",
+          "State": {"Name": "running"},
+          "PrivateIpAddress": "10.40.2.10",
+          "Placement": {"AvailabilityZone": "us-east-1a"},
+          "LaunchTime": "2025-11-01T10:00:00+00:00",
+          "VpcId": "vpc-prod001",
+          "Tags": [{"Key": "Name", "Value": "prod-api-01"}, {"Key": "Environment", "Value": "Prod"}, {"Key": "Owner", "Value": "Commerce"}]
+        },
+        {
+          "InstanceId": "i-stage001",
+          "InstanceType": "t3.small",
+          "State": {"Name": "running"},
+          "PrivateIpAddress": "10.30.2.20",
+          "Placement": {"AvailabilityZone": "us-east-1b"},
+          "LaunchTime": "2026-03-10T09:30:00+00:00",
+          "VpcId": "vpc-stage001",
+          "Tags": [{"Key": "Name", "Value": "stage-api-01"}, {"Key": "Environment", "Value": "Stage"}]
+        }
+      ]
+    }
+  ]
+}

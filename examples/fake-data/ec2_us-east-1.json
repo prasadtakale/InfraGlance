@@ -1,0 +1,30 @@
+{
+  "Reservations": [
+    {
+      "Instances": [
+        {
+          "InstanceId": "i-dev001",
+          "InstanceType": "t3.micro",
+          "State": {"Name": "running"},
+          "PrivateIpAddress": "10.10.1.10",
+          "PublicIpAddress": "203.0.113.10",
+          "Placement": {"AvailabilityZone": "us-east-1a"},
+          "LaunchTime": "2026-05-01T10:00:00+00:00",
+          "VpcId": "vpc-dev001",
+          "Tags": [{"Key": "Name", "Value": "dev-web-01"}, {"Key": "Environment", "Value": "Dev"}, {"Key": "Owner", "Value": "Platform"}]
+        },
+        {
+          "InstanceId": "i-qa001",
+          "InstanceType": "m5.large",
+          "State": {"Name": "stopped"},
+          "StateTransitionReason": "User initiated (2026-04-01 12:00:00 GMT)",
+          "PrivateIpAddress": "10.20.1.25",
+          "Placement": {"AvailabilityZone": "us-east-1b"},
+          "LaunchTime": "2026-02-01T08:00:00+00:00",
+          "VpcId": "vpc-qa001",
+          "Tags": [{"Key": "Name", "Value": "qa-worker-old"}, {"Key": "Environment", "Value": "QA"}]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "ReservedInstances": [
+    {
+      "ReservedInstancesId": "ri-prod-m5large",
+      "InstanceType": "m5.large",
+      "InstanceCount": 1,
+      "OfferingType": "Partial Upfront",
+      "Start": "2026-01-01T00:00:00+00:00",
+      "End": "2027-01-01T00:00:00+00:00",
+      "State": "active"
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "Vpcs": [
+    {
+      "VpcId": "vpc-dev001",
+      "CidrBlock": "10.10.0.0/16",
+      "State": "available",
+      "IsDefault": false,
+      "InstanceTenancy": "default",
+      "Tags": [{"Key": "Name", "Value": "Dev-VPC"}, {"Key": "Environment", "Value": "Dev"}]
+    },
+    {
+      "VpcId": "vpc-qa001",
+      "CidrBlock": "10.20.0.0/16",
+      "State": "available",
+      "IsDefault": false,
+      "InstanceTenancy": "default",
+      "Tags": [{"Key": "Name", "Value": "QA-VPC"}, {"Key": "Environment", "Value": "QA"}]
+    }
+  ]
+}

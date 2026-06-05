@@ -1,6 +1,14 @@
 infraglance.conf
-__pycache__/
+
+# Raw AWS collection data and generated reports may contain sensitive details.
 data/
 site/
-*.json
+
+# Runtime and local-only files.
+__pycache__/
+*.py[cod]
 *region_list.txt
+.DS_Store
+.claude/
+
+# Keep project JSON such as pricing.json and iam/*.json commit-friendly.

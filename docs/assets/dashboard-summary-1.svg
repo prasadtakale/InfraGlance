@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675" role="img" aria-labelledby="title desc">
+  <title id="title">InfraGlance dashboard preview</title>
+  <desc id="desc">Static preview of the InfraGlance summary dashboard using fake data.</desc>
+  <rect width="1200" height="675" fill="#ffffff"/>
+  <rect width="1200" height="92" fill="#0B3C5D"/>
+  <rect y="88" width="1200" height="4" fill="#F5B041"/>
+  <text x="32" y="42" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="#ffffff">InfraGlance</text>
+  <text x="32" y="70" font-family="Arial, sans-serif" font-size="15" fill="#ffffff">Static AWS infrastructure dashboard</text>
+  <g font-family="Arial, sans-serif" font-size="15">
+    <rect x="520" y="28" width="92" height="34" rx="4" fill="#F5B041"/>
+    <text x="540" y="50" fill="#0B3C5D" font-weight="700">Summary</text>
+    <text x="632" y="50" fill="#ffffff">EC2</text>
+    <text x="686" y="50" fill="#ffffff">RDS</text>
+    <text x="742" y="50" fill="#ffffff">Findings</text>
+    <text x="825" y="50" fill="#ffffff">Changes</text>
+  </g>
+  <g transform="translate(32 128)" font-family="Arial, sans-serif" fill="#0B3C5D">
+    <text x="0" y="0" font-size="24" font-weight="700">Summary</text>
+    <text x="0" y="30" font-size="15">Generated from fake data for README preview</text>
+    <g transform="translate(0 66)">
+      <g>
+        <rect width="170" height="76" rx="6" fill="#ffffff" stroke="#0B3C5D" stroke-opacity=".45"/>
+        <rect width="5" height="76" rx="3" fill="#F5B041"/>
+        <text x="18" y="30" font-size="16">Accounts</text>
+        <text x="18" y="56" font-size="24" font-weight="700">2</text>
+      </g>
+      <g transform="translate(190 0)">
+        <rect width="170" height="76" rx="6" fill="#ffffff" stroke="#0B3C5D" stroke-opacity=".45"/>
+        <rect width="5" height="76" rx="3" fill="#F5B041"/>
+        <text x="18" y="30" font-size="16">Total EC2</text>
+        <text x="18" y="56" font-size="24" font-weight="700">4</text>
+      </g>
+      <g transform="translate(380 0)">
+        <rect width="170" height="76" rx="6" fill="#ffffff" stroke="#0B3C5D" stroke-opacity=".45"/>
+        <rect width="5" height="76" rx="3" fill="#F5B041"/>
+        <text x="18" y="30" font-size="16">Monthly Est.</text>
+        <text x="18" y="56" font-size="24" font-weight="700">$92.85</text>
+      </g>
+      <g transform="translate(570 0)">
+        <rect width="170" height="76" rx="6" fill="#ffffff" stroke="#0B3C5D" stroke-opacity=".45"/>
+        <rect width="5" height="76" rx="3" fill="#F5B041"/>
+        <text x="18" y="30" font-size="16">High Findings</text>
+        <text x="18" y="56" font-size="24" font-weight="700">1</text>
+      </g>
+    </g>
+    <g transform="translate(0 190)">
+      <rect width="1136" height="310" rx="6" fill="#ffffff" stroke="#0B3C5D" stroke-opacity=".65"/>
+      <rect width="1136" height="42" rx="6" fill="#0B3C5D"/>
+      <g fill="#ffffff" font-size="14" font-weight="700">
+        <text x="20" y="27">Account</text>
+        <text x="240" y="27">EC2 Total</text>
+        <text x="390" y="27">Running</text>
+        <text x="540" y="27">Monthly Est.</text>
+        <text x="720" y="27">RI Coverage</text>
+        <text x="930" y="27">Findings</text>
+      </g>
+      <g font-size="14" fill="#0B3C5D">
+        <line x1="0" y1="94" x2="1136" y2="94" stroke="#0B3C5D" stroke-opacity=".25"/>
+        <line x1="0" y1="146" x2="1136" y2="146" stroke="#0B3C5D" stroke-opacity=".25"/>
+        <text x="20" y="74">Dev and QA</text>
+        <text x="260" y="74">2</text>
+        <text x="410" y="74">1</text>
+        <text x="560" y="74">$7.59</text>
+        <text x="750" y="74">100.0%</text>
+        <text x="950" y="74">4</text>
+        <text x="20" y="126">Stage and Prod</text>
+        <text x="260" y="126">2</text>
+        <text x="410" y="126">2</text>
+        <text x="560" y="126">$85.26</text>
+        <text x="750" y="126">50.0%</text>
+        <text x="950" y="126">1</text>
+      </g>
+      <rect x="20" y="188" width="210" height="36" rx="4" fill="#ffffff" stroke="#0B3C5D" stroke-opacity=".6"/>
+      <text x="36" y="211" font-family="Arial, sans-serif" font-size="14" fill="#0B3C5D">Search table</text>
+      <rect x="250" y="188" width="110" height="36" rx="4" fill="#0B3C5D"/>
+      <text x="274" y="211" font-family="Arial, sans-serif" font-size="14" fill="#ffffff" font-weight="700">Export CSV</text>
+    </g>
+  </g>
+</svg>

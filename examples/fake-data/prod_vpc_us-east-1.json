@@ -1,0 +1,20 @@
+{
+  "Vpcs": [
+    {
+      "VpcId": "vpc-stage001",
+      "CidrBlock": "10.30.0.0/16",
+      "State": "available",
+      "IsDefault": false,
+      "InstanceTenancy": "default",
+      "Tags": [{"Key": "Name", "Value": "Stage-VPC"}, {"Key": "Environment", "Value": "Stage"}]
+    },
+    {
+      "VpcId": "vpc-prod001",
+      "CidrBlock": "10.40.0.0/16",
+      "State": "available",
+      "IsDefault": false,
+      "InstanceTenancy": "default",
+      "Tags": [{"Key": "Name", "Value": "Prod-VPC"}, {"Key": "Environment", "Value": "Prod"}]
+    }
+  ]
+}

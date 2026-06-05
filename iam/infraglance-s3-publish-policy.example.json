@@ -1,0 +1,19 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "InfraGlancePublishReports",
+      "Effect": "Allow",
+      "Action": [
+        "s3:DeleteObject",
+        "s3:GetBucketLocation",
+        "s3:ListBucket",
+        "s3:PutObject"
+      ],
+      "Resource": [
+        "arn:aws:s3:::REPLACE_BUCKET_NAME",
+        "arn:aws:s3:::REPLACE_BUCKET_NAME/REPLACE_PREFIX/*"
+      ]
+    }
+  ]
+}

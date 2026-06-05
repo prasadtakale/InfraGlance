@@ -1,0 +1,19 @@
+{
+  "DBInstances": [
+    {
+      "DBInstanceIdentifier": "prod-orders-db",
+      "DBInstanceStatus": "available",
+      "DBInstanceClass": "db.m5.large",
+      "Engine": "postgres",
+      "EngineVersion": "15.4",
+      "PubliclyAccessible": false,
+      "StorageEncrypted": true,
+      "MultiAZ": true,
+      "StorageType": "gp3",
+      "AllocatedStorage": 500,
+      "AvailabilityZone": "us-east-1a",
+      "DBSubnetGroup": {"VpcId": "vpc-prod001"},
+      "TagList": [{"Key": "Name", "Value": "prod-orders-db"}, {"Key": "Environment", "Value": "Prod"}, {"Key": "Owner", "Value": "Commerce"}]
+    }
+  ]
+}

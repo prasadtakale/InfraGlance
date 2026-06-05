@@ -1,8 +1,71 @@
 # InfraGlance
 
-InfraGlance scans your AWS accounts and generates a static HTML dashboard showing EC2, RDS, Reserved Instances, security findings, and infrastructure changes — organized by VPC and environment. No server to run, no SaaS to sign up for. Just open the HTML file in a browser.
+[![CI](https://github.com/prasadtakale/InfraGlance/actions/workflows/ci.yml/badge.svg)](https://github.com/prasadtakale/InfraGlance/actions/workflows/ci.yml)
+[![Nightly Scan](https://github.com/prasadtakale/InfraGlance/actions/workflows/nightly.yml/badge.svg)](https://github.com/prasadtakale/InfraGlance/actions/workflows/nightly.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+**Static AWS Infrastructure Dashboard for Multi-Account Visibility, Security Findings, Cost Signals, and GovCloud Reviews.**
+
+InfraGlance scans your AWS accounts and generates a static HTML dashboard showing EC2, RDS, EKS, Reserved Instances, security findings, tag gaps, cost signals, trends, and infrastructure changes — organized by account, VPC, and environment. No server to run, no SaaS to sign up for. Just open the HTML file in a browser.
 
 I built this because the AWS Console is fine for one-off lookups but terrible for getting a quick picture across multiple accounts. Trying to answer "what's actually running in prod right now, and is any of it publicly exposed?" shouldn't require fifteen browser tabs.
+
+![InfraGlance dashboard preview](docs/assets/dashboard-summary.svg)
+
+---
+
+## Demo
+
+Try the fake-data demo without AWS credentials:
+
+```bash
+python3 render_report.py \
+  --title InfraGlance-Demo \
+  --manifest examples/fake-data/manifest.tsv \
+  --vpcs examples/fake-data/vpcs.tsv \
+  --output-dir examples/sample-report \
+  --generated-at demo \
+  --pricing-file pricing.json \
+  --required-tags Environment,Owner \
+  --state-file examples/sample-report/infraglance-state.json
+```
+
+Then open:
+
+```text
+examples/sample-report/summary.html
+```
+
+The checked-in `examples/sample-report/` files are generated from fake data and are safe to browse or link from GitHub. Add screenshots or a short demo GIF under `docs/assets/` when publishing the repository page or project portfolio.
+
+---
+
+## Why InfraGlance?
+
+| Tool | Best For | InfraGlance Difference |
+|------|----------|------------------------|
+| AWS Console | Manual resource lookup | InfraGlance gives a static cross-account view without clicking through services and accounts |
+| AWS Config | Compliance recording and resource history | InfraGlance is lighter, cheaper to start with, and produces a shareable HTML report |
+| Trusted Advisor | AWS best-practice checks | InfraGlance focuses on inventory, VPC grouping, cost signals, and report portability |
+| Steampipe | SQL queries across cloud APIs | InfraGlance needs no database or query knowledge for basic visibility |
+| CloudQuery | ETL into databases | InfraGlance avoids warehouse setup and produces static reports directly |
+| Prowler / ScoutSuite | Deep security auditing | InfraGlance is a smaller day-to-day inventory and executive visibility layer |
+
+InfraGlance is not a replacement for these tools. It is a fast, readable report layer for teams that need to understand what exists, what changed, what may cost money, and what needs review.
+
+---
+
+## Architecture
+
+```mermaid
+flowchart LR
+  A[AWS CLI] --> B[JSON collection in data/]
+  B --> C[Python renderer]
+  C --> D[Static HTML reports in site/]
+  D --> E[Open locally]
+  D --> F[Optional S3 publish]
+  D --> G[Optional Slack summary]
+```
 
 ---
 
@@ -47,6 +110,14 @@ open site/index.html
 ```
 
 The `--check` flag validates your credentials and regions without collecting any data. Worth running first if this is a new account or role.
+
+Useful flags:
+
+```bash
+bash infraglance.sh --config ./infraglance.prod.conf
+bash infraglance.sh --output-dir ./site-prod
+bash infraglance.sh --work-dir ./data-prod
+```
 
 ---
 
@@ -163,6 +234,14 @@ A GitHub Actions workflow is included at `.github/workflows/nightly.yml`. It run
 - Live cost estimation from the AWS Pricing API instead of the static `pricing.json`
 - Per-environment cost breakdowns on the Summary page
 - Lambda function inventory
+- EBS volume age, encryption, unattached volume, and snapshot visibility
+- ELB, ALB, and NLB inventory with public/private exposure
+- IAM access findings for stale users, broad policies, and unused access keys
+- S3 public bucket and bucket encryption review
+- WAF association and coverage reporting
+- NAT Gateway cost visibility by account and VPC
+- Route 53 public hosted zone visibility
+- RDS and EC2 rightsizing hints
 
 ---
 

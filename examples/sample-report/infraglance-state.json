@@ -1,0 +1,110 @@
+{
+  "generated_at": "demo",
+  "resources": {
+    "EC2|Dev and QA|us-east-1|i-dev001": {
+      "Account": "Dev and QA",
+      "Details": "{\"MonthlyCost\": 7.59, \"PublicIp\": true, \"RICoverage\": \"Covered\", \"State\": \"running\", \"VpcId\": \"vpc-dev001\"}",
+      "Region": "us-east-1",
+      "ResourceId": "i-dev001",
+      "ResourceType": "EC2"
+    },
+    "EC2|Dev and QA|us-east-1|i-qa001": {
+      "Account": "Dev and QA",
+      "Details": "{\"MonthlyCost\": 0, \"PublicIp\": false, \"RICoverage\": \"N/A\", \"State\": \"stopped\", \"VpcId\": \"vpc-qa001\"}",
+      "Region": "us-east-1",
+      "ResourceId": "i-qa001",
+      "ResourceType": "EC2"
+    },
+    "EC2|Stage and Prod|us-east-1|i-prod001": {
+      "Account": "Stage and Prod",
+      "Details": "{\"MonthlyCost\": 70.08, \"PublicIp\": false, \"RICoverage\": \"Covered\", \"State\": \"running\", \"VpcId\": \"vpc-prod001\"}",
+      "Region": "us-east-1",
+      "ResourceId": "i-prod001",
+      "ResourceType": "EC2"
+    },
+    "EC2|Stage and Prod|us-east-1|i-stage001": {
+      "Account": "Stage and Prod",
+      "Details": "{\"MonthlyCost\": 15.18, \"PublicIp\": false, \"RICoverage\": \"Gap\", \"State\": \"running\", \"VpcId\": \"vpc-stage001\"}",
+      "Region": "us-east-1",
+      "ResourceId": "i-stage001",
+      "ResourceType": "EC2"
+    },
+    "Finding|Dev and QA|us-east-1|EC2|i-dev001|EC2 instance has a public IP address": {
+      "Account": "Dev and QA",
+      "Details": "{\"Finding\": \"EC2 instance has a public IP address\", \"Severity\": \"Medium\"}",
+      "Region": "us-east-1",
+      "ResourceId": "i-dev001",
+      "ResourceType": "Finding"
+    },
+    "Finding|Dev and QA|us-east-1|EC2|i-qa001|EC2 instance has been stopped beyond threshold": {
+      "Account": "Dev and QA",
+      "Details": "{\"Finding\": \"EC2 instance has been stopped beyond threshold\", \"Severity\": \"Medium\"}",
+      "Region": "us-east-1",
+      "ResourceId": "i-qa001",
+      "ResourceType": "Finding"
+    },
+    "Finding|Dev and QA|us-east-1|SecurityGroup|sg-devweb|Security group allows ingress from the internet": {
+      "Account": "Dev and QA",
+      "Details": "{\"Finding\": \"Security group allows ingress from the internet\", \"Severity\": \"Medium\"}",
+      "Region": "us-east-1",
+      "ResourceId": "sg-devweb",
+      "ResourceType": "Finding"
+    },
+    "Finding|Dev and QA|us-east-1|SecurityGroup|sg-qaadmin|Security group allows ingress from the internet": {
+      "Account": "Dev and QA",
+      "Details": "{\"Finding\": \"Security group allows ingress from the internet\", \"Severity\": \"High\"}",
+      "Region": "us-east-1",
+      "ResourceId": "sg-qaadmin",
+      "ResourceType": "Finding"
+    },
+    "Finding|Stage and Prod|us-east-1|EC2|i-stage001|Running EC2 instance has no RI coverage": {
+      "Account": "Stage and Prod",
+      "Details": "{\"Finding\": \"Running EC2 instance has no RI coverage\", \"Severity\": \"Medium\"}",
+      "Region": "us-east-1",
+      "ResourceId": "i-stage001",
+      "ResourceType": "Finding"
+    },
+    "RDS|Dev and QA|us-east-1|dev-orders-db": {
+      "Account": "Dev and QA",
+      "Details": "{\"Encrypted\": true, \"Public\": false, \"Status\": \"available\", \"VpcId\": \"vpc-dev001\"}",
+      "Region": "us-east-1",
+      "ResourceId": "dev-orders-db",
+      "ResourceType": "RDS"
+    },
+    "RDS|Stage and Prod|us-east-1|prod-orders-db": {
+      "Account": "Stage and Prod",
+      "Details": "{\"Encrypted\": true, \"Public\": false, \"Status\": \"available\", \"VpcId\": \"vpc-prod001\"}",
+      "Region": "us-east-1",
+      "ResourceId": "prod-orders-db",
+      "ResourceType": "RDS"
+    },
+    "VPC|Dev and QA|us-east-1|vpc-dev001": {
+      "Account": "Dev and QA",
+      "Details": "{\"Default\": false, \"Environment\": \"Dev\"}",
+      "Region": "us-east-1",
+      "ResourceId": "vpc-dev001",
+      "ResourceType": "VPC"
+    },
+    "VPC|Dev and QA|us-east-1|vpc-qa001": {
+      "Account": "Dev and QA",
+      "Details": "{\"Default\": false, \"Environment\": \"QA\"}",
+      "Region": "us-east-1",
+      "ResourceId": "vpc-qa001",
+      "ResourceType": "VPC"
+    },
+    "VPC|Stage and Prod|us-east-1|vpc-prod001": {
+      "Account": "Stage and Prod",
+      "Details": "{\"Default\": false, \"Environment\": \"Prod\"}",
+      "Region": "us-east-1",
+      "ResourceId": "vpc-prod001",
+      "ResourceType": "VPC"
+    },
+    "VPC|Stage and Prod|us-east-1|vpc-stage001": {
+      "Account": "Stage and Prod",
+      "Details": "{\"Default\": false, \"Environment\": \"Stage\"}",
+      "Region": "us-east-1",
+      "ResourceId": "vpc-stage001",
+      "ResourceType": "VPC"
+    }
+  }
+}
