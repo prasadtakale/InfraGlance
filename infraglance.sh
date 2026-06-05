@@ -222,9 +222,10 @@ account_regions() {
       partition_regions
     else
       if [[ -z "${_REGION_CACHE[${account}]+x}" ]]; then
+        # shellcheck disable=SC2016 # AWS CLI JMESPath literals require backticks inside single quotes.
         _REGION_CACHE["${account}"]="$(aws_for_account "${account}" ec2 describe-regions --all-regions --query 'Regions[?OptInStatus==`opt-in-not-required` || OptInStatus==`opted-in`].RegionName' --output text | tr '\t' '\n')"
       fi
-      printf '%s\n' ${_REGION_CACHE["${account}"]}
+      printf '%s\n' "${_REGION_CACHE["${account}"]}"
     fi
   else
     printf '%s\n' "${regions_ref[@]}"
