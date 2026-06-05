@@ -1,129 +1,58 @@
 # InfraGlance
 
-> A single command that turns your AWS accounts into a shareable, browser-ready visibility dashboard — no servers, no SaaS subscriptions, nothing to install beyond the AWS CLI and Python.
+InfraGlance scans your AWS accounts and generates a static HTML dashboard showing EC2, RDS, Reserved Instances, security findings, and infrastructure changes — organized by VPC and environment. No server to run, no SaaS to sign up for. Just open the HTML file in a browser.
+
+I built this because the AWS Console is fine for one-off lookups but terrible for getting a quick picture across multiple accounts. Trying to answer "what's actually running in prod right now, and is any of it publicly exposed?" shouldn't require fifteen browser tabs.
 
 ---
 
-## The Problem
+## What it does
 
-If your organization runs more than a handful of AWS accounts, you already know the frustration: your cloud environment has grown faster than your ability to see it clearly. There is no single place to answer "what is actually running, where, and what is it costing us?" without clicking through dozens of AWS Console screens — and the Console was not designed to give you a cross-account picture.
+Run `bash infraglance.sh` and it collects data from your configured accounts using the AWS CLI, then generates a folder of static HTML pages:
 
-Think of it like this: imagine you own several office buildings, but the occupancy records, maintenance logs, and utility bills are kept in a separate filing cabinet in each building, organized differently by whoever managed it at the time. Getting a complete picture means physically visiting each one. That is what managing a sprawling AWS environment feels like without the right tooling.
+| Page | Contents |
+|------|----------|
+| `summary.html` | Cross-account overview — EC2 counts, estimated cost, RI coverage, security findings per account |
+| `index.html` | EC2 inventory grouped by VPC, with cost estimates and RI coverage per instance |
+| `rds.html` | RDS databases — engine, encryption status, Multi-AZ, public accessibility |
+| `reserved.html` | Active Reserved Instances and which running EC2s are covered (or not) |
+| `findings.html` | Auto-detected security issues — open security groups, unencrypted RDS, publicly accessible databases |
+| `tags.html` | EC2 and RDS resources missing required tags |
+| `changes.html` | What changed since the last scan — new, removed, or modified resources |
+| `trends.html` | Line charts of EC2 count, cost, and findings over time |
+| `eks.html` | EKS clusters and node groups, with Spot vs On-Demand breakdown |
 
-The concrete pains this addresses:
-
-- **Silent waste**: Stopped virtual servers accumulate quietly and keep contributing to your bill. Nobody notices until the monthly invoice arrives.
-- **Audit anxiety**: When a compliance auditor asks "show me all your publicly accessible databases," the answer should not require a week of prep work across multiple accounts.
-- **The share problem**: The AWS Console is not shareable. You cannot email a snapshot of your infrastructure to a VP, a finance lead, or an external auditor.
-- **Multi-account blind spots**: Most teams maintain separate Development, Staging, and Production accounts. Getting a unified view requires juggling separate browser sessions and CLI profiles.
-- **Reserved Instance gaps**: Reserved Instances — pre-paid compute commitments that discount hourly rates — expire or go uncovered without obvious notification, leaving money on the table.
-
----
-
-## The Solution
-
-InfraGlance is a shell script that collects data from your AWS accounts using the AWS CLI, then renders everything into a self-contained static HTML dashboard. Open it in a browser, attach it to an email, or sync it to S3. No web server, no login, no ongoing subscription.
-
-One run. A complete picture.
-
-**Technically:** `infraglance.sh` uses the AWS CLI and IAM (AWS Identity and Access Management — the permission system) role assumption to collect JSON from each account and region you configure. `render_report.py` transforms that data into a multi-page HTML report using only Python's standard library — no `pip install`, no Node.js, no external packages of any kind. The output has zero CDN references and works completely offline.
+Every table has search, column sort, and CSV export. The output is plain HTML with no external dependencies — it works offline and is safe to email or drop in S3.
 
 ---
 
-## What You Can See
+## Setup
 
-| Page | What's Shown |
-|------|-------------|
-| **EC2** | All virtual servers — state (running/stopped), instance type, VPC (Virtual Private Cloud — a private network segment in AWS), IP addresses, days running or stopped, estimated monthly cost, Reserved Instance coverage |
-| **RDS** | All managed databases — engine, version, status, encryption state, Multi-AZ failover configuration, public accessibility, VPC placement |
-| **Reserved Instances** | Active pre-paid compute commitments — instance type, count, offering type, start/end dates, and which running instances have no coverage |
-| **Security Findings** | Auto-detected issues: publicly accessible databases, unencrypted RDS storage, EC2 instances with public IP addresses, security groups open to the internet, default VPCs in use, long-stopped instances |
-| **Changes** | Infrastructure diff between the current run and the previous one — new, removed, or modified resources |
+You need Bash 4+, Python 3.8+, and AWS CLI v2. No Python packages to install — the renderer uses only the standard library.
 
-All pages include sortable columns, per-table search, and one-click CSV export.
-
----
-
-## Key Features
-
-✅ **Zero output dependencies** — The generated HTML uses no external libraries or CDN requests. It works offline, in air-gapped environments, and is safe to attach to an email without leaking internal data to third-party hosts.
-
-✅ **AWS GovCloud support** — Set `PARTITION=aws-us-gov` and InfraGlance automatically restricts collection to `us-gov-west-1` and `us-gov-east-1`, with GovCloud-format ARN validation. Most open-source infrastructure tools do not support GovCloud at all.
-
-✅ **Multi-account, multi-region** — Configure as many AWS accounts as you need, each with its own IAM role, named CLI profile, or default credential chain. Regions are either explicit or auto-discovered from your account's enabled list.
-
-✅ **VPC-tabbed navigation** — Each resource page groups instances by VPC with tab-based navigation, so a team responsible for one network segment does not have to scroll past another team's resources to find their own.
-
-✅ **Automatic security findings** — No external security scanner required. InfraGlance flags publicly accessible databases (High), internet-open security groups for SSH/RDP/all-ports (High), unencrypted RDS storage (High), EC2 instances with public IPs (Medium), and default VPCs in use (Low) — out of the box.
-
-✅ **Reserved Instance coverage tracking** — See at a glance which running EC2 instances are not covered by an active pre-paid commitment, so you can act before the discount window closes.
-
-✅ **Run-to-run change detection** — InfraGlance saves a state file after each run and diffs it against the previous one. The Changes page shows what appeared, disappeared, or was modified since last time — lightweight drift tracking with no additional tools.
-
-✅ **Estimated monthly cost** — Calculated from a local `pricing.json` table. No billing API calls, no extra IAM permissions for cost data, no surprises.
-
-✅ **Redaction controls** — Before sharing a report externally, selectively redact private IPs, public IPs, instance names, database identifiers, and VPC CIDR blocks (network address ranges). Share with auditors without exposing network topology.
-
-✅ **Optional S3 publishing** — Set `S3_BUCKET` in the config and the report syncs to S3 automatically after each run. Pair with a bucket policy for a read-only stakeholder URL.
-
----
-
-## Who This Is For
-
-| Role | Why it helps |
-|------|-------------|
-| **DevOps / Platform engineers** | One command for a full environment inventory without Console clicking |
-| **FinOps / Cost teams** | Spot stopped instances, RI gaps, and cost estimates across accounts in one place |
-| **Compliance / Audit teams** | Point-in-time shareable snapshot with built-in security findings; redaction support for external reviewers |
-| **Engineering managers** | An understandable, exportable dashboard that does not require AWS Console access to read |
-| **Cloud architects** | Cross-account, cross-region view organized by VPC and environment |
-
----
-
-## Quick Start
+> **macOS note:** macOS ships Bash 3. Install a current version with `brew install bash`.
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/youruser/infraglance.git && cd infraglance
-```
-
-```bash
-# 2. Copy and edit the config
+git clone https://github.com/prasadtakale/InfraGlance.git
+cd InfraGlance
 cp infraglance.conf.example infraglance.conf
-# Set your AWS account IDs, profiles or role ARNs, and target regions
 ```
 
+Edit `infraglance.conf` to point at your AWS accounts, then verify your credentials before the first full run:
+
 ```bash
-# 3. Validate credentials and config before collecting data
 bash infraglance.sh --check
-```
-
-```bash
-# 4. Run InfraGlance
 bash infraglance.sh
+open site/index.html
 ```
 
-```bash
-# 5. Open the report
-open site/index.html          # macOS
-xdg-open site/index.html      # Linux
-```
+The `--check` flag validates your credentials and regions without collecting any data. Worth running first if this is a new account or role.
 
 ---
 
-## Prerequisites
+## IAM permissions
 
-⚠️ **Runtime requirements**
-
-| Requirement | Notes |
-|-------------|-------|
-| Bash 4+ | macOS ships with Bash 3 — install a current version via `brew install bash` |
-| Python 3.8+ | Standard library only — no `pip install` required |
-| AWS CLI v2 | Configured with credentials for each target account |
-
-⚠️ **Minimum IAM permissions**
-
-Attach the following read-only policy to each IAM role or user InfraGlance authenticates as. These are the only permissions needed.
+InfraGlance only needs read access. Attach this policy to whatever role or user it authenticates as:
 
 ```json
 {
@@ -138,6 +67,10 @@ Attach the following read-only policy to each IAM role or user InfraGlance authe
         "ec2:DescribeReservedInstances",
         "ec2:DescribeRegions",
         "rds:DescribeDBInstances",
+        "eks:ListClusters",
+        "eks:DescribeCluster",
+        "eks:ListNodegroups",
+        "eks:DescribeNodegroup",
         "sts:GetCallerIdentity"
       ],
       "Resource": "*"
@@ -146,96 +79,96 @@ Attach the following read-only policy to each IAM role or user InfraGlance authe
 }
 ```
 
-If using cross-account IAM role assumption, also grant `sts:AssumeRole` on the calling account's IAM entity.
+For cross-account scanning, the calling identity also needs `sts:AssumeRole`.
 
 ---
 
 ## Configuration
 
-All configuration lives in `infraglance.conf`. The example file is fully commented:
+The config file covers accounts, regions, VPC grouping, cost settings, and a few optional features:
 
 ```bash
-cp infraglance.conf.example infraglance.conf
-```
+# Which AWS partition — auto detects from credentials, or set explicitly
+PARTITION="auto"   # auto | aws | aws-us-gov
 
-**Key settings:**
-
-```bash
-# AWS partition: auto | aws | aws-us-gov
-PARTITION="auto"
-
-# Where to write the HTML report and collected JSON
-OUTPUT_DIR="./site"
-WORK_DIR="./data"
-
-# One or more accounts to scan
+# Accounts to scan
 ACCOUNTS=("prod" "staging" "shared")
 
-# Per-account: label, authentication, and regions
 ACCOUNT_prod_LABEL="Production"
-ACCOUNT_prod_PROFILE="prod-profile"   # AWS CLI named profile
-ACCOUNT_prod_ROLE_ARN=""              # or an IAM role ARN for cross-account access
+ACCOUNT_prod_PROFILE="prod-profile"        # named AWS CLI profile
+ACCOUNT_prod_ROLE_ARN=""                   # or assume a role instead
 ACCOUNT_prod_REGIONS=("us-east-1" "us-west-2")
 
-# Tag key used to assign VPCs to environments (tag-based auto-discovery)
+# VPCs are grouped by this tag automatically
 ENVIRONMENT_TAG_KEY="Environment"
-AUTO_DISCOVER_VPCS="true"
 
-# Optional: sync the report to S3 after each run
-S3_BUCKET="my-infraglance-reports"
-S3_PREFIX="infraglance"
+# Publish to S3 after each run (leave empty to skip)
+S3_BUCKET="my-reports-bucket"
 
-# Optional: redact sensitive fields before sharing reports externally
+# Post a summary to Slack after each scan
+SLACK_WEBHOOK_URL=""
+
+# Tags that should be present on every EC2 and RDS resource
+REQUIRED_TAGS="Environment,Owner,CostCenter"
+
+# Redact sensitive fields before sharing reports externally
 REDACT_PRIVATE_IPS="false"
 REDACT_PUBLIC_IPS="false"
 REDACT_INSTANCE_NAMES="false"
 REDACT_DB_NAMES="false"
-REDACT_VPC_CIDRS="false"
 ```
 
-See [infraglance.conf.example](infraglance.conf.example) for the full reference, including manual VPC-to-environment mappings and cost estimation settings.
+See [infraglance.conf.example](infraglance.conf.example) for the full reference with comments.
 
 ---
 
-## Sample Output
+## Multi-account setup
 
-The report is a multi-page static HTML dashboard with a consistent layout across all pages:
+Each account gets its own block of config variables. InfraGlance assumes roles as needed so you can scan accounts you don't have direct credentials for:
 
-- **Header**: report title, generation timestamp, and page navigation
-- **EC2** (`index.html`): VPC tabs across the top; each tab shows a cost and RI coverage summary bar followed by a sortable instance table. Rows are color-coded — running instances, recently stopped (amber), stopped beyond the configured threshold (bold), and instances missing RI coverage (highlighted)
-- **Security Findings** (`findings.html`): High / Medium / Low counts in a summary bar, then a sortable findings table with account, region, resource type, and specific details
-- **Changes** (`changes.html`): Rows marked New, Removed, or Changed since the previous run
-- All tables include a live search filter, click-to-sort column headers, and an Export CSV button
+```bash
+ACCOUNTS=("prod" "staging" "security")
 
-The output is a folder of plain `.html` files with no JavaScript framework and no external requests.
+ACCOUNT_prod_LABEL="Production"
+ACCOUNT_prod_ROLE_ARN="arn:aws:iam::111122223333:role/infraglance-readonly"
+ACCOUNT_prod_REGIONS=("us-east-1")
+
+ACCOUNT_staging_LABEL="Staging"
+ACCOUNT_staging_PROFILE="staging-cli-profile"
+ACCOUNT_staging_REGIONS=("us-east-1" "us-west-2")
+
+ACCOUNT_security_LABEL="Security"
+ACCOUNT_security_ROLE_ARN="arn:aws:iam::444455556666:role/infraglance-readonly"
+ACCOUNT_security_REGIONS=("auto")   # auto-discovers all enabled regions
+```
 
 ---
 
-## AWS GovCloud Support
+## GovCloud
 
-InfraGlance works with **AWS GovCloud (US)** without a separate code path or configuration format. Set `PARTITION="aws-us-gov"` in your config and:
+Set `PARTITION="aws-us-gov"` and InfraGlance restricts collection to `us-gov-west-1` and `us-gov-east-1` automatically. Role ARNs use the `arn:aws-us-gov:` prefix. The partition is validated against `sts:GetCallerIdentity` before any data is collected, so a misconfigured role fails immediately rather than silently collecting from the wrong environment.
 
-- Region auto-discovery restricts automatically to `us-gov-west-1` and `us-gov-east-1`
-- IAM role ARNs follow the GovCloud format: `arn:aws-us-gov:iam::123456789012:role/infraglance-readonly`
-- The partition is validated against the identity returned by `sts:GetCallerIdentity` at startup — misconfiguration fails loudly before any data collection begins
+The generated HTML has no CDN dependencies and makes no outbound requests — the report can be reviewed in an air-gapped environment or shared with auditors without any data leaving your control.
 
-Because the generated HTML contains no CDN references, no telemetry, and makes no outbound network requests after the AWS data collection phase, InfraGlance is suitable for use in FedRAMP-aligned environments (FedRAMP is the US federal cloud security compliance framework) where external API calls and third-party tooling are restricted or prohibited. The report can be reviewed entirely offline and is safe to transfer to an air-gapped review environment.
+---
+
+## Nightly runs
+
+A GitHub Actions workflow is included at `.github/workflows/nightly.yml`. It runs at 02:00 UTC, assumes an IAM role via OIDC, pulls the previous history file from S3 (for trend graphs), runs the scan, and uploads the report. Required secrets: `AWS_ROLE_ARN`, `S3_BUCKET`, `SLACK_WEBHOOK_URL`.
 
 ---
 
 ## Roadmap
 
-- [ ] **Live cost estimation** — Replace the static `pricing.json` with on-demand AWS Pricing API data, and add per-environment cost breakdowns
-- [ ] **Untagged resource alerts** — Flag EC2 and RDS resources missing required tags (cost center, owner, environment) as a Security Findings subcategory
-- [ ] **EKS inventory** — Add cluster, node group, and workload visibility alongside EC2 and RDS
-- [ ] **Slack / email digest** — Post a summary or alert on new High findings after each run without requiring a persistent process
-- [ ] **Historical trending** — Track resource counts and estimated cost over time across runs with a lightweight time-series view
+- Live cost estimation from the AWS Pricing API instead of the static `pricing.json`
+- Per-environment cost breakdowns on the Summary page
+- Lambda function inventory
 
 ---
 
 ## Contributing
 
-Contributions are welcome. InfraGlance is intentionally kept simple — a shell script, a Python file, and a config example. If you are adding a new data source, follow the existing pattern: collect raw JSON in `infraglance.sh`, then parse and render in `render_report.py`. Open an issue to discuss larger changes before writing code, so effort is not duplicated.
+The codebase is intentionally small — `infraglance.sh` handles AWS data collection and `render_report.py` does all the HTML generation. If you're adding a new resource type, the pattern is: collect raw JSON in the shell script, add a `load_*` function and page renderer in Python. Open an issue before starting on anything large.
 
 ---
 
