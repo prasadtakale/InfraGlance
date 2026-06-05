@@ -59,12 +59,12 @@ InfraGlance is not a replacement for these tools. It is a fast, readable report 
 
 ```mermaid
 flowchart LR
-  A[AWS CLI] --> B[JSON collection in data/]
-  B --> C[Python renderer]
-  C --> D[Static HTML reports in site/]
-  D --> E[Open locally]
-  D --> F[Optional S3 publish]
-  D --> G[Optional Slack summary]
+  A["AWS CLI"] --> B["JSON collection in data folder"]
+  B --> C["Python renderer"]
+  C --> D["Static HTML reports in site folder"]
+  D --> E["Open locally"]
+  D --> F["Optional S3 publish"]
+  D --> G["Optional Slack summary"]
 ```
 
 ---
