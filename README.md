@@ -27,6 +27,7 @@ python3 render_report.py \
   --generated-at demo \
   --pricing-file pricing.json \
   --required-tags Environment,Owner \
+  --history-file examples/sample-report/infraglance-history.json \
   --state-file examples/sample-report/infraglance-state.json
 ```
 
@@ -36,20 +37,46 @@ Then open:
 examples/sample-report/summary.html
 ```
 
-The checked-in `examples/sample-report/` files are generated from fake data and are safe to browse or link from GitHub. Add screenshots or a short demo GIF under `docs/assets/` when publishing the repository page or project portfolio.
+The checked-in `examples/sample-report/` files are generated from fake data and are safe to browse or link from GitHub. The sample history file includes multiple fake snapshots, so `examples/sample-report/trends.html` shows trend graphs immediately.
+
+---
+
+## Screenshots
+
+These screenshots use fake demo data, not live AWS account data.
+
+### EC2
+
+![EC2 VPC view](docs/assets/ec2.svg)
+
+### RDS
+
+![RDS inventory](docs/assets/rds.svg)
+
+### EKS
+
+![EKS clusters](docs/assets/eks.svg)
+
+### Security Findings
+
+![Security findings](docs/assets/security-findings.svg)
+
+### Trends
+
+![Trends signals](docs/assets/trends.svg)
 
 ---
 
 ## Why InfraGlance?
 
-| Tool | Best For | InfraGlance Difference |
-|------|----------|------------------------|
-| AWS Console | Manual resource lookup | InfraGlance gives a static cross-account view without clicking through services and accounts |
-| AWS Config | Compliance recording and resource history | InfraGlance is lighter, cheaper to start with, and produces a shareable HTML report |
-| Trusted Advisor | AWS best-practice checks | InfraGlance focuses on inventory, VPC grouping, cost signals, and report portability |
-| Steampipe | SQL queries across cloud APIs | InfraGlance needs no database or query knowledge for basic visibility |
-| CloudQuery | ETL into databases | InfraGlance avoids warehouse setup and produces static reports directly |
-| Prowler / ScoutSuite | Deep security auditing | InfraGlance is a smaller day-to-day inventory and executive visibility layer |
+| Tool                 | Best For                                  | InfraGlance Difference                                                                       |
+| -------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------- |
+| AWS Console          | Manual resource lookup                    | InfraGlance gives a static cross-account view without clicking through services and accounts |
+| AWS Config           | Compliance recording and resource history | InfraGlance is lighter, cheaper to start with, and produces a shareable HTML report          |
+| Trusted Advisor      | AWS best-practice checks                  | InfraGlance focuses on inventory, VPC grouping, cost signals, and report portability         |
+| Steampipe            | SQL queries across cloud APIs             | InfraGlance needs no database or query knowledge for basic visibility                        |
+| CloudQuery           | ETL into databases                        | InfraGlance avoids warehouse setup and produces static reports directly                      |
+| Prowler / ScoutSuite | Deep security auditing                    | InfraGlance is a smaller day-to-day inventory and executive visibility layer                 |
 
 InfraGlance is not a replacement for these tools. It is a fast, readable report layer for teams that need to understand what exists, what changed, what may cost money, and what needs review.
 
@@ -73,17 +100,17 @@ flowchart LR
 
 Run `bash infraglance.sh` and it collects data from your configured accounts using the AWS CLI, then generates a folder of static HTML pages:
 
-| Page | Contents |
-|------|----------|
-| `summary.html` | Cross-account overview — EC2 counts, estimated cost, RI coverage, security findings per account |
-| `index.html` | EC2 inventory grouped by VPC, with cost estimates and RI coverage per instance |
-| `rds.html` | RDS databases — engine, encryption status, Multi-AZ, public accessibility |
-| `reserved.html` | Active Reserved Instances and which running EC2s are covered (or not) |
+| Page            | Contents                                                                                             |
+| --------------- | ---------------------------------------------------------------------------------------------------- |
+| `summary.html`  | Cross-account overview — EC2 counts, estimated cost, RI coverage, security findings per account      |
+| `index.html`    | EC2 inventory grouped by VPC, with cost estimates and RI coverage per instance                       |
+| `rds.html`      | RDS databases — engine, encryption status, Multi-AZ, public accessibility                            |
+| `reserved.html` | Active Reserved Instances and which running EC2s are covered (or not)                                |
 | `findings.html` | Auto-detected security issues — open security groups, unencrypted RDS, publicly accessible databases |
-| `tags.html` | EC2 and RDS resources missing required tags |
-| `changes.html` | What changed since the last scan — new, removed, or modified resources |
-| `trends.html` | Line charts of EC2 count, cost, and findings over time |
-| `eks.html` | EKS clusters and node groups, with Spot vs On-Demand breakdown |
+| `tags.html`     | EC2 and RDS resources missing required tags                                                          |
+| `changes.html`  | What changed since the last scan — new, removed, or modified resources                               |
+| `trends.html`   | Line charts of EC2 count, cost, and findings over time                                               |
+| `eks.html`      | EKS clusters and node groups, with Spot vs On-Demand breakdown                                       |
 
 Every table has search, column sort, and CSV export. The output is plain HTML with no external dependencies — it works offline and is safe to email or drop in S3.
 

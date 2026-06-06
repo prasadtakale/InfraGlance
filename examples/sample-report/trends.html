@@ -79,7 +79,7 @@
 <body>
   <header>
     <h1>InfraGlance-Demo</h1>
-    <div>Generated at demo</div>
+    <div>Generated at demo-3</div>
     <nav><a class="" href="summary.html">Summary</a><a class="active" href="trends.html">Trends</a><a class="" href="findings.html">Security Findings</a><a class="" href="tags.html">Tagging</a><a class="" href="changes.html">Changes</a><a class="" href="index.html">EC2</a><a class="" href="rds.html">RDS</a><a class="" href="reserved.html">Reserved Instances</a><a class="" href="eks.html">EKS</a></nav>
     <div class="report-filter">
       <label for="accountFilter">Account/Profile</label>
@@ -88,7 +88,80 @@
       </select>
     </div>
   </header>
-  <main><div class="empty">Trend graphs appear after two or more scans have completed. Run InfraGlance again after your next scheduled scan to see historical trends.</div></main>
+  <main>
+<div class="trend-grid">
+  <div class="trend-card">
+    <h3>EC2 Instances</h3>
+    <div class="chart-legend">
+      <span><span class="legend-dot" style="background:#0B3C5D"></span>Running</span>
+      <span><span class="legend-dot" style="background:#F5B041"></span>Stopped</span>
+    </div>
+    <div id="chart-ec2" class="chart-area"></div>
+  </div>
+  <div class="trend-card">
+    <h3>Estimated Monthly Cost</h3>
+    <div id="chart-cost" class="chart-area"></div>
+  </div>
+  <div class="trend-card">
+    <h3>Security Findings</h3>
+    <div class="chart-legend">
+      <span><span class="legend-dot" style="background:#c0392b"></span>High</span>
+      <span><span class="legend-dot" style="background:#F5B041"></span>Medium</span>
+      <span><span class="legend-dot" style="background:#27ae60"></span>Low</span>
+    </div>
+    <div id="chart-findings" class="chart-area"></div>
+  </div>
+  <div class="trend-card">
+    <h3>Untagged Resources</h3>
+    <div id="chart-untagged" class="chart-area"></div>
+  </div>
+</div>
+<script>
+(function() {
+  var HISTORY = [{"change_count": 1, "ec2_running": 1, "ec2_stopped": 1, "generated_at": "demo-1", "high_findings": 1, "low_findings": 0, "medium_findings": 2, "monthly_cost": 7.59, "rds_count": 1, "untagged": 2}, {"change_count": 2, "ec2_running": 2, "ec2_stopped": 1, "generated_at": "demo-2", "high_findings": 1, "low_findings": 0, "medium_findings": 3, "monthly_cost": 77.67, "rds_count": 2, "untagged": 1}, {"generated_at": "demo-3", "ec2_running": 3, "ec2_stopped": 1, "monthly_cost": 92.85, "high_findings": 1, "medium_findings": 4, "low_findings": 0, "untagged": 2, "rds_count": 2, "change_count": 0}];
+  if (!HISTORY || HISTORY.length < 2) return;
+  function drawChart(id, series) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var W = el.clientWidth || 560, H = 180;
+    var pad = {t:12, r:16, b:32, l:48};
+    var cW = W - pad.l - pad.r, cH = H - pad.t - pad.b;
+    var n = HISTORY.length;
+    var allVals = series.reduce(function(a,s){ return a.concat(HISTORY.map(function(d){return d[s.key]||0;})); }, []);
+    var maxV = Math.max.apply(null, allVals) || 1;
+    var minV = Math.min.apply(null, allVals.concat([0]));
+    var rng = maxV - minV || 1;
+    function xS(i){ return pad.l + (n > 1 ? (i/(n-1))*cW : cW/2); }
+    function yS(v){ return pad.t + cH - ((v-minV)/rng)*cH; }
+    var svg = '<svg viewBox="0 0 '+W+' '+H+'" xmlns="http://www.w3.org/2000/svg">';
+    for (var t=0;t<=4;t++) {
+      var gy = pad.t + (t/4)*cH;
+      var gv = Math.round(maxV - (t/4)*rng);
+      svg += '<line x1="'+pad.l+'" y1="'+gy+'" x2="'+(pad.l+cW)+'" y2="'+gy+'" stroke="rgba(11,60,93,.1)" stroke-width="1"/>';
+      svg += '<text x="'+(pad.l-4)+'" y="'+(gy+4)+'" text-anchor="end" font-size="10" fill="rgba(11,60,93,.55)">'+gv+'</text>';
+    }
+    var step = Math.max(1, Math.ceil(n/7));
+    for (var i=0;i<n;i+=step) {
+      var lbl = String(HISTORY[i].generated_at||'').substring(0,10);
+      svg += '<text x="'+xS(i)+'" y="'+(pad.t+cH+14)+'" text-anchor="middle" font-size="9" fill="rgba(11,60,93,.5)">'+lbl+'</text>';
+    }
+    series.forEach(function(s) {
+      var pts = HISTORY.map(function(d,i){ return xS(i)+','+yS(d[s.key]||0); }).join(' ');
+      svg += '<polyline points="'+pts+'" fill="none" stroke="'+s.color+'" stroke-width="2" stroke-linejoin="round"/>';
+      HISTORY.forEach(function(d,i){
+        svg += '<circle cx="'+xS(i)+'" cy="'+yS(d[s.key]||0)+'" r="3" fill="'+s.color+'" />';
+      });
+    });
+    svg += '</svg>';
+    el.innerHTML = svg;
+  }
+  drawChart('chart-ec2', [{key:'ec2_running',color:'#0B3C5D'},{key:'ec2_stopped',color:'#F5B041'}]);
+  drawChart('chart-cost', [{key:'monthly_cost',color:'#27ae60'}]);
+  drawChart('chart-findings', [{key:'high_findings',color:'#c0392b'},{key:'medium_findings',color:'#F5B041'},{key:'low_findings',color:'#27ae60'}]);
+  drawChart('chart-untagged', [{key:'untagged',color:'#8e44ad'}]);
+})();
+</script>
+</main>
   <script>
     function cellText(row, index) {
       return row.children[index].textContent.trim();
