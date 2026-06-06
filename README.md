@@ -4,13 +4,31 @@
 [![Nightly Scan](https://github.com/prasadtakale/InfraGlance/actions/workflows/nightly.yml/badge.svg)](https://github.com/prasadtakale/InfraGlance/actions/workflows/nightly.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**Static AWS Infrastructure Dashboard for Multi-Account Visibility, Security Findings, Cost Signals, and GovCloud Reviews.**
+**Static AWS infrastructure dashboard for multi-account visibility, security findings, cost signals, and GovCloud reviews.**
 
-InfraGlance scans your AWS accounts and generates a static HTML dashboard showing EC2, RDS, EKS, Reserved Instances, security findings, tag gaps, cost signals, trends, and infrastructure changes — organized by account, VPC, and environment. No server to run, no SaaS to sign up for. Just open the HTML file in a browser.
+InfraGlance scans your AWS accounts and creates a static HTML dashboard for EC2, RDS, EKS, Reserved Instances, security findings, tag gaps, cost signals, trends, and infrastructure changes. Everything is organized by account, VPC, and environment. There is no server to run and no SaaS account to create. Just open the HTML file in a browser.
 
-I built this because the AWS Console is fine for one-off lookups but terrible for getting a quick picture across multiple accounts. Trying to answer "what's actually running in prod right now, and is any of it publicly exposed?" shouldn't require fifteen browser tabs.
+I built this because the AWS Console is fine for one-off lookups, but it is not great when you need a quick view across multiple accounts. Questions like "what is running in prod right now?" and "is anything publicly exposed?" should not require fifteen browser tabs.
 
 ![InfraGlance dashboard preview](docs/assets/dashboard-summary.svg)
+
+---
+
+## Why InfraGlance?
+
+InfraGlance provides a single-pane view of AWS infrastructure across multiple accounts and regions.
+
+Unlike the AWS Console, InfraGlance focuses on:
+
+- Multi-account visibility
+- Infrastructure governance
+- Security findings
+- Cost awareness
+- EKS inventory
+- GovCloud support
+- Offline static reports
+
+No agents. No database. No SaaS.
 
 ---
 
@@ -67,21 +85,6 @@ These screenshots use fake demo data, not live AWS account data.
 
 ---
 
-## Why InfraGlance?
-
-| Tool                 | Best For                                  | InfraGlance Difference                                                                       |
-| -------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------- |
-| AWS Console          | Manual resource lookup                    | InfraGlance gives a static cross-account view without clicking through services and accounts |
-| AWS Config           | Compliance recording and resource history | InfraGlance is lighter, cheaper to start with, and produces a shareable HTML report          |
-| Trusted Advisor      | AWS best-practice checks                  | InfraGlance focuses on inventory, VPC grouping, cost signals, and report portability         |
-| Steampipe            | SQL queries across cloud APIs             | InfraGlance needs no database or query knowledge for basic visibility                        |
-| CloudQuery           | ETL into databases                        | InfraGlance avoids warehouse setup and produces static reports directly                      |
-| Prowler / ScoutSuite | Deep security auditing                    | InfraGlance is a smaller day-to-day inventory and executive visibility layer                 |
-
-InfraGlance is not a replacement for these tools. It is a fast, readable report layer for teams that need to understand what exists, what changed, what may cost money, and what needs review.
-
----
-
 ## Architecture
 
 ```mermaid
@@ -102,23 +105,23 @@ Run `bash infraglance.sh` and it collects data from your configured accounts usi
 
 | Page            | Contents                                                                                             |
 | --------------- | ---------------------------------------------------------------------------------------------------- |
-| `summary.html`  | Cross-account overview — EC2 counts, estimated cost, RI coverage, security findings per account      |
+| `summary.html`  | Cross-account overview: EC2 counts, estimated cost, RI coverage, and security findings per account   |
 | `index.html`    | EC2 inventory grouped by VPC, with cost estimates and RI coverage per instance                       |
-| `rds.html`      | RDS databases — engine, encryption status, Multi-AZ, public accessibility                            |
+| `rds.html`      | RDS databases: engine, encryption status, Multi-AZ, and public accessibility                         |
 | `reserved.html` | Active Reserved Instances and which running EC2s are covered (or not)                                |
-| `findings.html` | Auto-detected security issues — open security groups, unencrypted RDS, publicly accessible databases |
+| `findings.html` | Auto-detected security issues: open security groups, unencrypted RDS, and public databases           |
 | `tags.html`     | EC2 and RDS resources missing required tags                                                          |
-| `changes.html`  | What changed since the last scan — new, removed, or modified resources                               |
+| `changes.html`  | What changed since the last scan: new, removed, or modified resources                                |
 | `trends.html`   | Line charts of EC2 count, cost, and findings over time                                               |
 | `eks.html`      | EKS clusters and node groups, with Spot vs On-Demand breakdown                                       |
 
-Every table has search, column sort, and CSV export. The output is plain HTML with no external dependencies — it works offline and is safe to email or drop in S3.
+Every table has search, column sorting, and CSV export. The output is plain HTML with no external dependencies, so it works offline and is easy to email or publish to S3.
 
 ---
 
 ## Setup
 
-You need Bash 4+, Python 3.8+, and AWS CLI v2. No Python packages to install — the renderer uses only the standard library.
+You need Bash 4+, Python 3.8+, and AWS CLI v2. There are no Python packages to install because the renderer uses only the standard library.
 
 > **macOS note:** macOS ships Bash 3. Install a current version with `brew install bash`.
 
@@ -186,7 +189,7 @@ For cross-account scanning, the calling identity also needs `sts:AssumeRole`.
 The config file covers accounts, regions, VPC grouping, cost settings, and a few optional features:
 
 ```bash
-# Which AWS partition — auto detects from credentials, or set explicitly
+# Which AWS partition to use. Auto detects from credentials, or set explicitly.
 PARTITION="auto"   # auto | aws | aws-us-gov
 
 # Accounts to scan
@@ -246,7 +249,7 @@ ACCOUNT_security_REGIONS=("auto")   # auto-discovers all enabled regions
 
 Set `PARTITION="aws-us-gov"` and InfraGlance restricts collection to `us-gov-west-1` and `us-gov-east-1` automatically. Role ARNs use the `arn:aws-us-gov:` prefix. The partition is validated against `sts:GetCallerIdentity` before any data is collected, so a misconfigured role fails immediately rather than silently collecting from the wrong environment.
 
-The generated HTML has no CDN dependencies and makes no outbound requests — the report can be reviewed in an air-gapped environment or shared with auditors without any data leaving your control.
+The generated HTML has no CDN dependencies and makes no outbound requests. You can review the report in an air-gapped environment or share it with auditors without any data leaving your control.
 
 ---
 
@@ -274,7 +277,7 @@ A GitHub Actions workflow is included at `.github/workflows/nightly.yml`. It run
 
 ## Contributing
 
-The codebase is intentionally small — `infraglance.sh` handles AWS data collection and `render_report.py` does all the HTML generation. If you're adding a new resource type, the pattern is: collect raw JSON in the shell script, add a `load_*` function and page renderer in Python. Open an issue before starting on anything large.
+The codebase is intentionally small. `infraglance.sh` handles AWS data collection, and `render_report.py` handles the HTML generation. If you are adding a new resource type, the pattern is simple: collect raw JSON in the shell script, then add a `load_*` function and page renderer in Python. Open an issue before starting on anything large.
 
 ---
 

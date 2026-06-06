@@ -1,16 +1,16 @@
 # Contributing
 
-Thanks for improving InfraGlance.
+Thanks for helping improve InfraGlance.
 
 ## Before You Start
 
 For small fixes, open a pull request directly.
 
-For larger changes, open an issue first so the design can be discussed before implementation.
+For larger changes, open an issue first so we can discuss the design before implementation.
 
 ## Local Checks
 
-Run these before opening a pull request:
+Run these checks before opening a pull request:
 
 ```bash
 bash -n infraglance.sh
@@ -50,4 +50,4 @@ Do not commit:
 - Any generated report containing real AWS data
 - Any AWS keys, session tokens, account secrets, or internal hostnames that should not be public
 
-Use fake data for examples.
+Use fake data for examples and screenshots.

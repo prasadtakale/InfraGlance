@@ -1,6 +1,6 @@
 # Security Policy
 
-InfraGlance is designed to run with read-only AWS permissions and generate static HTML reports. It should not be given write access to AWS resources.
+InfraGlance is designed to run with read-only AWS permissions and generate static HTML reports. Do not give it write access to AWS resources.
 
 ## Supported Versions
 
@@ -10,7 +10,7 @@ Use the latest version from the `main` branch unless a stable release has been p
 
 Please do not open a public issue for sensitive security reports.
 
-Report security concerns by emailing the repository owner or by opening a private GitHub security advisory if available.
+Report security concerns by emailing the repository owner. If private GitHub security advisories are enabled, you can use that instead.
 
 Include:
 
@@ -32,7 +32,7 @@ Generated reports and raw scan data can include:
 
 Do not publish `data/`, `site/`, or `infraglance.conf` to a public repository.
 
-Use report redaction before sharing reports outside your team.
+Use report redaction before sharing reports outside your team or company.
 
 ## Recommended AWS Permissions
 

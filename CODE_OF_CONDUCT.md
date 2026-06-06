@@ -8,7 +8,7 @@ InfraGlance follows a simple standard: be respectful, constructive, and focused 
 - Respect different experience levels.
 - Give actionable feedback.
 - Keep discussions technical and professional.
-- Assume good intent, but correct problems clearly.
+- Assume good intent, and correct problems clearly when needed.
 
 ## Unacceptable Behavior
 
