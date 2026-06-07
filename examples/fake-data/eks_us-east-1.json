@@ -1,0 +1,18 @@
+{
+  "Clusters": [
+    {
+      "name": "dev-platform",
+      "version": "1.29",
+      "status": "ACTIVE",
+      "nodegroups": [
+        {
+          "nodegroupName": "dev-on-demand",
+          "status": "ACTIVE",
+          "capacityType": "ON_DEMAND",
+          "instanceTypes": ["t3.large"],
+          "scalingConfig": {"desiredSize": 2, "minSize": 1, "maxSize": 4}
+        }
+      ]
+    }
+  ]
+}

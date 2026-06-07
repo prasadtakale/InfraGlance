@@ -1,0 +1,40 @@
+{
+  "snapshots": [
+    {
+      "change_count": 1,
+      "ec2_running": 1,
+      "ec2_stopped": 1,
+      "generated_at": "demo-1",
+      "high_findings": 1,
+      "low_findings": 0,
+      "medium_findings": 2,
+      "monthly_cost": 7.59,
+      "rds_count": 1,
+      "untagged": 2
+    },
+    {
+      "change_count": 2,
+      "ec2_running": 2,
+      "ec2_stopped": 1,
+      "generated_at": "demo-2",
+      "high_findings": 1,
+      "low_findings": 0,
+      "medium_findings": 3,
+      "monthly_cost": 77.67,
+      "rds_count": 2,
+      "untagged": 1
+    },
+    {
+      "change_count": 0,
+      "ec2_running": 3,
+      "ec2_stopped": 1,
+      "generated_at": "demo-3",
+      "high_findings": 1,
+      "low_findings": 0,
+      "medium_findings": 4,
+      "monthly_cost": 92.85,
+      "rds_count": 2,
+      "untagged": 2
+    }
+  ]
+}

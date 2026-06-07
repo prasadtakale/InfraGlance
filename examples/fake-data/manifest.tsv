@@ -1,0 +1,12 @@
+vpc	Dev and QA	us-east-1	examples/fake-data/vpc_us-east-1.json
+security_group	Dev and QA	us-east-1	examples/fake-data/security_groups_us-east-1.json
+ec2	Dev and QA	us-east-1	examples/fake-data/ec2_us-east-1.json
+rds	Dev and QA	us-east-1	examples/fake-data/rds_us-east-1.json
+reserved	Dev and QA	us-east-1	examples/fake-data/reserved_us-east-1.json
+eks	Dev and QA	us-east-1	examples/fake-data/eks_us-east-1.json
+vpc	Stage and Prod	us-east-1	examples/fake-data/prod_vpc_us-east-1.json
+security_group	Stage and Prod	us-east-1	examples/fake-data/prod_security_groups_us-east-1.json
+ec2	Stage and Prod	us-east-1	examples/fake-data/prod_ec2_us-east-1.json
+rds	Stage and Prod	us-east-1	examples/fake-data/prod_rds_us-east-1.json
+reserved	Stage and Prod	us-east-1	examples/fake-data/prod_reserved_us-east-1.json
+eks	Stage and Prod	us-east-1	examples/fake-data/prod_eks_us-east-1.json

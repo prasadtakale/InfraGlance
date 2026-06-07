@@ -1,0 +1,19 @@
+{
+  "DBInstances": [
+    {
+      "DBInstanceIdentifier": "dev-orders-db",
+      "DBInstanceStatus": "available",
+      "DBInstanceClass": "db.t3.medium",
+      "Engine": "postgres",
+      "EngineVersion": "15.4",
+      "PubliclyAccessible": false,
+      "StorageEncrypted": true,
+      "MultiAZ": false,
+      "StorageType": "gp3",
+      "AllocatedStorage": 100,
+      "AvailabilityZone": "us-east-1a",
+      "DBSubnetGroup": {"VpcId": "vpc-dev001"},
+      "TagList": [{"Key": "Name", "Value": "dev-orders-db"}, {"Key": "Environment", "Value": "Dev"}, {"Key": "Owner", "Value": "Platform"}]
+    }
+  ]
+}

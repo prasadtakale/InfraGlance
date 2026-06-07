@@ -1,0 +1,18 @@
+{
+  "Clusters": [
+    {
+      "name": "prod-platform",
+      "version": "1.29",
+      "status": "ACTIVE",
+      "nodegroups": [
+        {
+          "nodegroupName": "prod-spot",
+          "status": "ACTIVE",
+          "capacityType": "SPOT",
+          "instanceTypes": ["m5.large", "m5a.large"],
+          "scalingConfig": {"desiredSize": 3, "minSize": 2, "maxSize": 8}
+        }
+      ]
+    }
+  ]
+}

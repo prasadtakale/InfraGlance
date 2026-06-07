@@ -1,0 +1,13 @@
+{
+  "ReservedInstances": [
+    {
+      "ReservedInstancesId": "ri-dev-t3micro",
+      "InstanceType": "t3.micro",
+      "InstanceCount": 1,
+      "OfferingType": "No Upfront",
+      "Start": "2026-01-01T00:00:00+00:00",
+      "End": "2027-01-01T00:00:00+00:00",
+      "State": "active"
+    }
+  ]
+}

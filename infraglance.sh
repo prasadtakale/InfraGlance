@@ -2,12 +2,10 @@
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONFIG_FILE="${1:-${SCRIPT_DIR}/infraglance.conf}"
+CONFIG_FILE="${SCRIPT_DIR}/infraglance.conf"
 COMMAND="run"
-if [[ "${1:-}" == "--check" ]]; then
-  COMMAND="check"
-  CONFIG_FILE="${2:-${SCRIPT_DIR}/infraglance.conf}"
-fi
+OUTPUT_DIR_OVERRIDE=""
+WORK_DIR_OVERRIDE=""
 
 log() {
   printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
@@ -16,6 +14,57 @@ log() {
 die() {
   printf 'ERROR: %s\n' "$*" >&2
   exit 1
+}
+
+usage() {
+  cat <<'EOF'
+Usage: infraglance.sh [options]
+
+Options:
+  --check                 Validate config, credentials, partition, and regions.
+  --config FILE           Use a config file other than ./infraglance.conf.
+  --output-dir DIR        Override OUTPUT_DIR from the config file.
+  --work-dir DIR          Override WORK_DIR from the config file.
+  -h, --help              Show this help message.
+
+Examples:
+  ./infraglance.sh --check
+  ./infraglance.sh --config ./infraglance.prod.conf
+  ./infraglance.sh --output-dir ./site-demo
+EOF
+}
+
+parse_args() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --check)
+        COMMAND="check"
+        shift
+        ;;
+      --config)
+        [[ $# -ge 2 ]] || die "--config requires a file path"
+        CONFIG_FILE="$2"
+        shift 2
+        ;;
+      --output-dir)
+        [[ $# -ge 2 ]] || die "--output-dir requires a directory path"
+        OUTPUT_DIR_OVERRIDE="$2"
+        shift 2
+        ;;
+      --work-dir)
+        [[ $# -ge 2 ]] || die "--work-dir requires a directory path"
+        WORK_DIR_OVERRIDE="$2"
+        shift 2
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *)
+        die "Unknown argument: $1"
+        ;;
+    esac
+  done
 }
 
 require_command() {
@@ -58,6 +107,9 @@ load_config() {
   : "${REDACT_INSTANCE_NAMES:=false}"
   : "${REDACT_DB_NAMES:=false}"
   : "${REDACT_VPC_CIDRS:=false}"
+
+  [[ -z "${OUTPUT_DIR_OVERRIDE}" ]] || OUTPUT_DIR="${OUTPUT_DIR_OVERRIDE}"
+  [[ -z "${WORK_DIR_OVERRIDE}" ]] || WORK_DIR="${WORK_DIR_OVERRIDE}"
 
   [[ ${#ACCOUNTS[@]} -gt 0 ]] || die "ACCOUNTS cannot be empty"
   [[ ${#ENVIRONMENTS[@]} -gt 0 ]] || die "ENVIRONMENTS cannot be empty"
@@ -170,9 +222,10 @@ account_regions() {
       partition_regions
     else
       if [[ -z "${_REGION_CACHE[${account}]+x}" ]]; then
+        # shellcheck disable=SC2016 # AWS CLI JMESPath literals require backticks inside single quotes.
         _REGION_CACHE["${account}"]="$(aws_for_account "${account}" ec2 describe-regions --all-regions --query 'Regions[?OptInStatus==`opt-in-not-required` || OptInStatus==`opted-in`].RegionName' --output text | tr '\t' '\n')"
       fi
-      printf '%s\n' ${_REGION_CACHE["${account}"]}
+      printf '%s\n' "${_REGION_CACHE["${account}"]}"
     fi
   else
     printf '%s\n' "${regions_ref[@]}"
@@ -371,6 +424,7 @@ publish_to_s3() {
 }
 
 main() {
+  parse_args "$@"
   (( BASH_VERSINFO[0] > 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] >= 3) )) \
     || die "Bash 4.3 or later is required (running ${BASH_VERSION})"
   require_command aws
