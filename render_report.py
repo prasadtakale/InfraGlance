@@ -6,7 +6,7 @@ import json
 import re
 import sys
 import urllib.request
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -119,6 +119,8 @@ EKS_COLUMNS = [
     "NodeGroupStatus",
 ]
 
+ScanConfig = namedtuple("ScanConfig", ["pricing", "monthly_hours", "now", "stopped_amber_days", "stopped_red_days"])
+
 
 def str_to_bool(value):
     return str(value).lower() in {"1", "true", "yes", "on"}
@@ -179,60 +181,45 @@ def estimated_monthly(instance_type, pricing, monthly_hours):
         return 0
 
 
-def redact_ip(value):
-    return "REDACTED" if value else ""
-
-
-def redact_cidr(value):
-    return "REDACTED" if value else ""
-
-
-def redact_name(value):
+def _redact(value):
     return "REDACTED" if value else ""
 
 
 def apply_redaction(ec2_rows, rds_rows, vpc_rows, findings, changes, tagging_rows, options):
-    if options.redact_instance_names:
-        for row in ec2_rows:
-            row["Name"] = redact_name(row.get("Name", ""))
+    for row in ec2_rows:
+        if options.redact_instance_names:
+            row["Name"] = _redact(row.get("Name", ""))
+        if options.redact_private_ips:
+            row["PrivateIpAddress"] = _redact(row.get("PrivateIpAddress", ""))
+        if options.redact_public_ips:
+            row["PublicIpAddress"] = _redact(row.get("PublicIpAddress", ""))
 
     if options.redact_db_names:
         for row in rds_rows:
-            row["DBInstanceIdentifier"] = redact_name(row.get("DBInstanceIdentifier", ""))
-
-    if options.redact_private_ips:
-        for row in ec2_rows:
-            row["PrivateIpAddress"] = redact_ip(row.get("PrivateIpAddress", ""))
-
-    if options.redact_public_ips:
-        for row in ec2_rows:
-            row["PublicIpAddress"] = redact_ip(row.get("PublicIpAddress", ""))
-        for row in findings:
-            if "PublicIpAddress=" in row.get("Details", ""):
-                row["Details"] = re.sub(r"PublicIpAddress=[^\s,]+", "PublicIpAddress=REDACTED", row["Details"])
+            row["DBInstanceIdentifier"] = _redact(row.get("DBInstanceIdentifier", ""))
 
     if options.redact_vpc_cidrs:
         for row in vpc_rows:
-            row["CidrBlock"] = redact_cidr(row.get("CidrBlock", ""))
+            row["CidrBlock"] = _redact(row.get("CidrBlock", ""))
+
+    for row in findings:
+        if options.redact_public_ips and "PublicIpAddress=" in row.get("Details", ""):
+            row["Details"] = re.sub(r"PublicIpAddress=[^\s,]+", "PublicIpAddress=REDACTED", row["Details"])
+        if options.redact_db_names and row.get("ResourceType") == "RDS":
+            row["ResourceId"] = _redact(row.get("ResourceId", ""))
 
     if options.redact_db_names:
-        for row in findings:
-            if row.get("ResourceType") == "RDS":
-                row["ResourceId"] = redact_name(row.get("ResourceId", ""))
         for row in changes:
             if row.get("ResourceType") == "RDS":
-                row["ResourceId"] = redact_name(row.get("ResourceId", ""))
+                row["ResourceId"] = _redact(row.get("ResourceId", ""))
 
-    if options.redact_instance_names:
-        for row in tagging_rows:
-            if row.get("ResourceType") == "EC2":
-                row["Name"] = redact_name(row.get("Name", ""))
-
-    if options.redact_db_names:
-        for row in tagging_rows:
-            if row.get("ResourceType") == "RDS":
-                row["Name"] = redact_name(row.get("Name", ""))
-                row["ResourceId"] = redact_name(row.get("ResourceId", ""))
+    for row in tagging_rows:
+        resource_type = row.get("ResourceType")
+        if options.redact_instance_names and resource_type == "EC2":
+            row["Name"] = _redact(row.get("Name", ""))
+        if options.redact_db_names and resource_type == "RDS":
+            row["Name"] = _redact(row.get("Name", ""))
+            row["ResourceId"] = _redact(row.get("ResourceId", ""))
 
 
 def read_manifest(path):
@@ -324,7 +311,7 @@ def load_security_groups(entry):
     return rows
 
 
-def load_ec2(entry, env_by_vpc, vpc_details, pricing, monthly_hours, now, stopped_amber_days, stopped_red_days):
+def load_ec2(entry, env_by_vpc, vpc_details, config):
     with open(entry["path"]) as handle:
         payload = json.load(handle)
 
@@ -334,7 +321,7 @@ def load_ec2(entry, env_by_vpc, vpc_details, pricing, monthly_hours, now, stoppe
             vpc_id = instance.get("VpcId", "")
             state = instance.get("State", {}).get("Name", "")
             launch_time = instance.get("LaunchTime", "")
-            running_days = age_days(launch_time, now) if state == "running" else ""
+            running_days = age_days(launch_time, config.now) if state == "running" else ""
             stopped_days = ""
             row_class = ""
             if state == "running":
@@ -342,16 +329,16 @@ def load_ec2(entry, env_by_vpc, vpc_details, pricing, monthly_hours, now, stoppe
             elif state == "stopped":
                 stop_time = stopped_at(instance.get("StateTransitionReason", ""))
                 if stop_time:
-                    stopped_days = max((now - stop_time).days, 0)
+                    stopped_days = max((config.now - stop_time).days, 0)
                 else:
                     stopped_days = "Unknown"
-                if isinstance(stopped_days, int) and stopped_days >= stopped_red_days:
+                if isinstance(stopped_days, int) and stopped_days >= config.stopped_red_days:
                     row_class = "row-stopped-red"
-                elif isinstance(stopped_days, int) and stopped_days >= stopped_amber_days:
+                elif isinstance(stopped_days, int) and stopped_days >= config.stopped_amber_days:
                     row_class = "row-stopped-amber"
                 else:
                     row_class = "row-stopped"
-            monthly_cost = estimated_monthly(instance.get("InstanceType", ""), pricing, monthly_hours) if state == "running" else 0
+            monthly_cost = estimated_monthly(instance.get("InstanceType", ""), config.pricing, config.monthly_hours) if state == "running" else 0
             rows.append(
                 {
                     "__RowClass": row_class,
@@ -442,7 +429,7 @@ def load_history(path):
         if "snapshots" not in data:
             return {"snapshots": []}
         return data
-    except Exception:
+    except (json.JSONDecodeError, OSError):
         return {"snapshots": []}
 
 
@@ -475,14 +462,7 @@ def save_history(path, history, ec2_rows, rds_rows, findings, changes, tagging_r
         json.dump(history, handle, indent=2, sort_keys=True)
 
 
-def trends_content(history):
-    snapshots = history.get("snapshots", [])
-    if len(snapshots) < 2:
-        return '<div class="empty">Trend graphs appear after two or more scans have completed. Run InfraGlance again after your next scheduled scan to see historical trends.</div>'
-
-    history_json = json.dumps(snapshots)
-
-    return f"""
+_TRENDS_CHART_HTML = """\
 <div class="trend-grid">
   <div class="trend-card">
     <h3>EC2 Instances</h3>
@@ -509,53 +489,61 @@ def trends_content(history):
     <h3>Untagged Resources</h3>
     <div id="chart-untagged" class="chart-area"></div>
   </div>
-</div>
-<script>
-(function() {{
-  var HISTORY = {history_json};
+</div>"""
+
+# JS braces are real JS — no {{ }} escaping. __CHART_DATA__ is replaced at render time.
+_TRENDS_CHART_JS = """\
+(function() {
+  var HISTORY = __CHART_DATA__;
   if (!HISTORY || HISTORY.length < 2) return;
-  function drawChart(id, series) {{
+  function drawChart(id, series) {
     var el = document.getElementById(id);
     if (!el) return;
     var W = el.clientWidth || 560, H = 180;
-    var pad = {{t:12, r:16, b:32, l:48}};
+    var pad = {t:12, r:16, b:32, l:48};
     var cW = W - pad.l - pad.r, cH = H - pad.t - pad.b;
     var n = HISTORY.length;
-    var allVals = series.reduce(function(a,s){{ return a.concat(HISTORY.map(function(d){{return d[s.key]||0;}})); }}, []);
+    var allVals = series.reduce(function(a,s){ return a.concat(HISTORY.map(function(d){return d[s.key]||0;})); }, []);
     var maxV = Math.max.apply(null, allVals) || 1;
     var minV = Math.min.apply(null, allVals.concat([0]));
     var rng = maxV - minV || 1;
-    function xS(i){{ return pad.l + (n > 1 ? (i/(n-1))*cW : cW/2); }}
-    function yS(v){{ return pad.t + cH - ((v-minV)/rng)*cH; }}
+    function xS(i){ return pad.l + (n > 1 ? (i/(n-1))*cW : cW/2); }
+    function yS(v){ return pad.t + cH - ((v-minV)/rng)*cH; }
     var svg = '<svg viewBox="0 0 '+W+' '+H+'" xmlns="http://www.w3.org/2000/svg">';
-    for (var t=0;t<=4;t++) {{
+    for (var t=0;t<=4;t++) {
       var gy = pad.t + (t/4)*cH;
       var gv = Math.round(maxV - (t/4)*rng);
       svg += '<line x1="'+pad.l+'" y1="'+gy+'" x2="'+(pad.l+cW)+'" y2="'+gy+'" stroke="rgba(11,60,93,.1)" stroke-width="1"/>';
       svg += '<text x="'+(pad.l-4)+'" y="'+(gy+4)+'" text-anchor="end" font-size="10" fill="rgba(11,60,93,.55)">'+gv+'</text>';
-    }}
+    }
     var step = Math.max(1, Math.ceil(n/7));
-    for (var i=0;i<n;i+=step) {{
+    for (var i=0;i<n;i+=step) {
       var lbl = String(HISTORY[i].generated_at||'').substring(0,10);
       svg += '<text x="'+xS(i)+'" y="'+(pad.t+cH+14)+'" text-anchor="middle" font-size="9" fill="rgba(11,60,93,.5)">'+lbl+'</text>';
-    }}
-    series.forEach(function(s) {{
-      var pts = HISTORY.map(function(d,i){{ return xS(i)+','+yS(d[s.key]||0); }}).join(' ');
+    }
+    series.forEach(function(s) {
+      var pts = HISTORY.map(function(d,i){ return xS(i)+','+yS(d[s.key]||0); }).join(' ');
       svg += '<polyline points="'+pts+'" fill="none" stroke="'+s.color+'" stroke-width="2" stroke-linejoin="round"/>';
-      HISTORY.forEach(function(d,i){{
+      HISTORY.forEach(function(d,i){
         svg += '<circle cx="'+xS(i)+'" cy="'+yS(d[s.key]||0)+'" r="3" fill="'+s.color+'" />';
-      }});
-    }});
+      });
+    });
     svg += '</svg>';
     el.innerHTML = svg;
-  }}
-  drawChart('chart-ec2', [{{key:'ec2_running',color:'#0B3C5D'}},{{key:'ec2_stopped',color:'#F5B041'}}]);
-  drawChart('chart-cost', [{{key:'monthly_cost',color:'#27ae60'}}]);
-  drawChart('chart-findings', [{{key:'high_findings',color:'#c0392b'}},{{key:'medium_findings',color:'#F5B041'}},{{key:'low_findings',color:'#27ae60'}}]);
-  drawChart('chart-untagged', [{{key:'untagged',color:'#8e44ad'}}]);
-}})();
-</script>
-"""
+  }
+  drawChart('chart-ec2', [{key:'ec2_running',color:'#0B3C5D'},{key:'ec2_stopped',color:'#F5B041'}]);
+  drawChart('chart-cost', [{key:'monthly_cost',color:'#27ae60'}]);
+  drawChart('chart-findings', [{key:'high_findings',color:'#c0392b'},{key:'medium_findings',color:'#F5B041'},{key:'low_findings',color:'#27ae60'}]);
+  drawChart('chart-untagged', [{key:'untagged',color:'#8e44ad'}]);
+})();"""
+
+
+def trends_content(history):
+    snapshots = history.get("snapshots", [])
+    if len(snapshots) < 2:
+        return '<div class="empty">Trend graphs appear after two or more scans have completed. Run InfraGlance again after your next scheduled scan to see historical trends.</div>'
+    script = _TRENDS_CHART_JS.replace("__CHART_DATA__", json.dumps(snapshots))
+    return f"{_TRENDS_CHART_HTML}\n<script>\n{script}\n</script>\n"
 
 
 def load_eks(entry):
@@ -1696,6 +1684,13 @@ def main():
     pricing = load_pricing(args.pricing_file)
     now = datetime.now(timezone.utc)
     history = load_history(args.history_file) if args.history_file else {"snapshots": []}
+    scan_config = ScanConfig(
+        pricing=pricing,
+        monthly_hours=args.monthly_hours,
+        now=now,
+        stopped_amber_days=args.stopped_amber_days,
+        stopped_red_days=args.stopped_red_days,
+    )
 
     env_by_vpc, configured_vpcs = read_vpc_map(args.vpcs)
     ec2_rows, rds_rows, reserved_rows, vpc_rows, security_group_rows, eks_rows = [], [], [], [], [], []
@@ -1718,7 +1713,7 @@ def main():
 
     for entry in read_manifest(args.manifest):
         if entry["resource"] == "ec2":
-            ec2_rows.extend(load_ec2(entry, env_by_vpc, vpc_details, pricing, args.monthly_hours, now, args.stopped_amber_days, args.stopped_red_days))
+            ec2_rows.extend(load_ec2(entry, env_by_vpc, vpc_details, scan_config))
         elif entry["resource"] == "rds":
             rds_rows.extend(load_rds(entry, env_by_vpc, vpc_details))
         elif entry["resource"] == "reserved":
